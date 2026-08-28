@@ -1,0 +1,7 @@
+build/
+cmake-build-*/
+.DS_Store
+.vscode/
+.idea/
+tools/python/.venv/
+*.user
