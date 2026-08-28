@@ -73,14 +73,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout create()
     layout.add (makeChoice (kModel, "Model", { "1073", "1084" }, 0));
 
     // -- High shelf ----------------------------------------------------------
-    // The 1073's shelf is fixed at 12 kHz. The selector exists in both modes so
-    // that automation survives a model switch; in 1073 mode the DSP ignores it
-    // and the editor greys it out. Default index 1 == 12 kHz on the 1084, so
-    // the two models agree at the default.
-    layout.add (std::make_unique<PositionalChoice> (
-        juce::ParameterID { kHfFreq, kVersionHint }, "HF Freq",
-        juce::StringArray { "12 kHz", "12 kHz", "12 kHz" },
-        juce::StringArray { "10 kHz", "12 kHz", "16 kHz" }, 1));
+    // Only the 1084 can select a shelf frequency; the 1073's is fixed at 12 kHz.
+    // The control still exists in 1073 mode so automation survives a model
+    // switch, but the DSP clamps it to 12 kHz and the editor greys it out.
+    // (An earlier version relabelled all three positions "12 kHz" in 1073 mode,
+    // which just looked like a broken menu.)
+    layout.add (makeChoice (kHfFreq, "HF Freq", { "10 kHz", "12 kHz", "16 kHz" }, 1));
 
     layout.add (makeFloat (kHfGain, "HF Gain", -16.0f, 16.0f, 0.01f, 0.0f, dbAttr()));
 

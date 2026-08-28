@@ -9,13 +9,13 @@ names and trademarks belong to their owners and are not used in this product.
 
 ## Status
 
-Phase 1 complete. Builds as VST3, AU, and Standalone; passes `auval`,
+Phase 2 complete. Builds as VST3, AU, and Standalone; passes `auval`,
 `pluginval --strictness-level 10`, and its own test suite.
 
-The full 17-parameter schema is in place and exposed to hosts. The level and
-routing path (input gain, phase, output, dry/wet mix) is live. The EQ bands are
-declared but do not filter yet -- that is Phase 2, the admittance-summed LC
-network.
+The equaliser works. All three bands, the high-pass and the 1084 low-pass are
+implemented as a shared feedback network rather than a chain of biquads, so the
+bands interact and the mid bell shows proportional Q the way the hardware does.
+Saturation and the transformer model are Phase 4; the custom GUI is Phase 3.
 
 See `docs/plan.md` for the full roadmap.
 
@@ -39,6 +39,16 @@ Built plugins are copied to `~/Library/Audio/Plug-Ins/` automatically.
 
 For a release universal binary, configure with
 `-DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"`.
+
+## Measuring
+
+```bash
+./build/measure bands
+```
+
+`measure curve` prints magnitude and phase for a given setting, `measure bands`
+demonstrates band interaction, `measure q` shows proportional Q. It links the
+DSP core directly, with no plugin host involved.
 
 ## Testing
 

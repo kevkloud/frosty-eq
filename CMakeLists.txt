@@ -32,7 +32,9 @@ juce_add_plugin(FrostyEQ
 target_sources(FrostyEQ PRIVATE
     src/PluginProcessor.cpp
     src/PluginEditor.cpp
-    src/params/ParameterLayout.cpp)
+    src/params/ParameterLayout.cpp
+    src/dsp/EqNetwork.cpp
+    src/dsp/DspCore.cpp)
 
 target_include_directories(FrostyEQ PRIVATE src)
 
@@ -75,3 +77,26 @@ target_link_libraries(FrostyEQTests PRIVATE
     juce::juce_recommended_warning_flags)
 
 add_test(NAME parameters COMMAND FrostyEQTests)
+
+add_executable(FrostyDspTests tests/DspTests.cpp
+    src/dsp/EqNetwork.cpp
+    src/dsp/DspCore.cpp)
+
+target_include_directories(FrostyDspTests PRIVATE src)
+
+# The DSP core is deliberately free of any JUCE dependency, so this target
+# builds as plain C++ with no framework at all.
+target_link_libraries(FrostyDspTests PRIVATE
+    juce::juce_recommended_config_flags
+    juce::juce_recommended_warning_flags)
+
+add_test(NAME dsp COMMAND FrostyDspTests)
+
+#==============================================================================
+# Offline measurement harness. Drives the DSP core with no host involved.
+#==============================================================================
+add_executable(measure tools/measure/main.cpp src/dsp/EqNetwork.cpp)
+target_include_directories(measure PRIVATE src)
+target_link_libraries(measure PRIVATE
+    juce::juce_recommended_config_flags
+    juce::juce_recommended_warning_flags)

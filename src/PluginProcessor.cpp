@@ -11,20 +11,29 @@ FrostyEqAudioProcessor::FrostyEqAudioProcessor()
           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "PARAMS", P::create())
 {
-    modelParam       = apvts.getRawParameterValue (P::kModel);
-    inputGainParam   = apvts.getRawParameterValue (P::kInputGain);
-    outputLevelParam = apvts.getRawParameterValue (P::kOutputLevel);
-    mixParam         = apvts.getRawParameterValue (P::kMix);
-    phaseParam       = apvts.getRawParameterValue (P::kPhase);
-    eqInParam        = apvts.getRawParameterValue (P::kEqIn);
-    autoGainParam    = apvts.getRawParameterValue (P::kAutoGain);
+    const auto bind = [this] (const char* id) { return apvts.getRawParameterValue (id); };
 
-    jassert (modelParam != nullptr && inputGainParam != nullptr
-             && outputLevelParam != nullptr && mixParam != nullptr);
+    modelParam       = bind (P::kModel);
+    hfFreqParam      = bind (P::kHfFreq);
+    hfGainParam      = bind (P::kHfGain);
+    midFreqParam     = bind (P::kMidFreq);
+    midGainParam     = bind (P::kMidGain);
+    midHiQParam      = bind (P::kMidHiQ);
+    lfFreqParam      = bind (P::kLfFreq);
+    lfGainParam      = bind (P::kLfGain);
+    hpfIndexParam    = bind (P::kHpfFreq);
+    lpfIndexParam    = bind (P::kLpfFreq);
+    inputGainParam   = bind (P::kInputGain);
+    outputLevelParam = bind (P::kOutputLevel);
+    mixParam         = bind (P::kMix);
+    phaseParam       = bind (P::kPhase);
+    eqInParam        = bind (P::kEqIn);
+    autoGainParam    = bind (P::kAutoGain);
 
-    hfFreqParam  = dynamic_cast<P::PositionalChoice*> (apvts.getParameter (P::kHfFreq));
-    hpfFreqParam = dynamic_cast<P::PositionalChoice*> (apvts.getParameter (P::kHpfFreq));
-    jassert (hfFreqParam != nullptr && hpfFreqParam != nullptr);
+    jassert (modelParam != nullptr && midGainParam != nullptr && mixParam != nullptr);
+
+    hpfFreqChoice = dynamic_cast<P::PositionalChoice*> (apvts.getParameter (P::kHpfFreq));
+    jassert (hpfFreqChoice != nullptr);
 
     apvts.addParameterListener (P::kModel, this);
     parameterChanged (P::kModel, modelParam->load());
@@ -42,42 +51,25 @@ void FrostyEqAudioProcessor::parameterChanged (const juce::String& parameterID, 
     if (parameterID != P::kModel)
         return;
 
-    // Fired from whichever thread moved the parameter, so this must stay
-    // allocation- and lock-free: two atomic stores plus an async trigger.
-    const auto m = (Model) (int) newValue;
-
-    if (hfFreqParam  != nullptr) hfFreqParam->setModel (m);
-    if (hpfFreqParam != nullptr) hpfFreqParam->setModel (m);
+    // Fired from whichever thread moved the parameter, so this stays
+    // allocation- and lock-free: one atomic store plus an async trigger.
+    if (hpfFreqChoice != nullptr)
+        hpfFreqChoice->setModel ((Model) (int) newValue);
 
     triggerAsyncUpdate();
 }
 
 void FrostyEqAudioProcessor::handleAsyncUpdate()
 {
-    // Switching models changes what the frequency selectors are called, so the
-    // host needs to re-read the parameter text. Message thread only.
+    // Switching models changes what the high-pass detents are called, so the
+    // host must re-read the parameter text. Message thread only.
     updateHostDisplay();
 }
 
 //==============================================================================
 void FrostyEqAudioProcessor::prepareToPlay (double sampleRate, int maximumExpectedSamplesPerBlock)
 {
-    constexpr double rampSeconds = 0.02;
-
-    inputGainSmoothed.reset   (sampleRate, rampSeconds);
-    outputLevelSmoothed.reset (sampleRate, rampSeconds);
-    mixSmoothed.reset         (sampleRate, rampSeconds);
-
-    inputGainSmoothed.setCurrentAndTargetValue (
-        juce::Decibels::decibelsToGain (inputGainParam->load (std::memory_order_relaxed)));
-    outputLevelSmoothed.setCurrentAndTargetValue (
-        juce::Decibels::decibelsToGain (outputLevelParam->load (std::memory_order_relaxed)));
-    mixSmoothed.setCurrentAndTargetValue (mixParam->load (std::memory_order_relaxed) * 0.01f);
-
-    // All allocation happens here so that processBlock never has to.
-    dryBuffer.setSize (getTotalNumOutputChannels(), maximumExpectedSamplesPerBlock,
-                       false, false, true);
-    dryBuffer.clear();
+    dsp.prepare (sampleRate, maximumExpectedSamplesPerBlock, getTotalNumOutputChannels());
 
     for (auto* a : { &inputPeak, &outputPeak })
         for (auto& p : *a)
@@ -89,7 +81,7 @@ void FrostyEqAudioProcessor::prepareToPlay (double sampleRate, int maximumExpect
 
 void FrostyEqAudioProcessor::releaseResources()
 {
-    dryBuffer.setSize (0, 0);
+    dsp.reset();
 }
 
 bool FrostyEqAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -118,48 +110,34 @@ void FrostyEqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
     for (int ch = numIn; ch < numOut; ++ch)
         buffer.clear (ch, 0, numSamples);
 
-    const auto numCh = juce::jmin (numOut, dryBuffer.getNumChannels());
-
-    for (int ch = 0; ch < juce::jmin (2, numCh); ++ch)
+    for (int ch = 0; ch < juce::jmin (2, numOut); ++ch)
         inputPeak[(size_t) ch].store (buffer.getMagnitude (ch, 0, numSamples),
                                       std::memory_order_relaxed);
 
-    // Keep the unprocessed signal for the Mix blend.
-    for (int ch = 0; ch < numCh; ++ch)
-        dryBuffer.copyFrom (ch, 0, buffer, ch, 0, numSamples);
+    const auto load = [] (const std::atomic<float>* p) { return p->load (std::memory_order_relaxed); };
 
-    inputGainSmoothed.setTargetValue (
-        juce::Decibels::decibelsToGain (inputGainParam->load (std::memory_order_relaxed)));
-    outputLevelSmoothed.setTargetValue (
-        juce::Decibels::decibelsToGain (outputLevelParam->load (std::memory_order_relaxed)));
-    mixSmoothed.setTargetValue (mixParam->load (std::memory_order_relaxed) * 0.01f);
+    DspCore::Params p;
+    p.model         = (Model) (int) load (modelParam);
+    p.hfFreqIndex   = (int) load (hfFreqParam);
+    p.midFreqIndex  = (int) load (midFreqParam);
+    p.lfFreqIndex   = (int) load (lfFreqParam);
+    p.hpfIndex      = (int) load (hpfIndexParam);
+    p.lpfIndex      = (int) load (lpfIndexParam);
+    p.hfGainDb      = load (hfGainParam);
+    p.midGainDb     = load (midGainParam);
+    p.lfGainDb      = load (lfGainParam);
+    p.midHiQ        = load (midHiQParam) > 0.5f;
+    p.inputGainDb   = load (inputGainParam);
+    p.outputLevelDb = load (outputLevelParam);
+    p.mixPercent    = load (mixParam);
+    p.eqIn          = load (eqInParam) > 0.5f;
+    p.phaseInvert   = load (phaseParam) > 0.5f;
+    p.autoGain      = load (autoGainParam) > 0.5f;
 
-    const auto polarity = phaseParam->load (std::memory_order_relaxed) > 0.5f ? -1.0f : 1.0f;
+    dsp.setParams (p);
+    dsp.process (buffer.getArrayOfWritePointers(), numOut, numSamples);
 
-    // Declared, not yet honoured. eqIn gates the EQ network (Phase 2); autoGain
-    // compensates the network's insertion gain (Phase 4). Both are read here so
-    // the wiring is exercised and the parameters are not dead.
-    juce::ignoreUnused (eqInParam, autoGainParam);
-
-    for (int n = 0; n < numSamples; ++n)
-    {
-        const auto preGain  = inputGainSmoothed.getNextValue() * polarity;
-        const auto postGain = outputLevelSmoothed.getNextValue();
-        const auto wet      = mixSmoothed.getNextValue();
-        const auto dry      = 1.0f - wet;
-
-        for (int ch = 0; ch < numCh; ++ch)
-        {
-            auto* d = buffer.getWritePointer (ch);
-
-            // Phase 2 inserts the EQ network between these two gain stages.
-            const auto processed = d[n] * preGain * postGain;
-
-            d[n] = processed * wet + dryBuffer.getReadPointer (ch)[n] * dry;
-        }
-    }
-
-    for (int ch = 0; ch < juce::jmin (2, numCh); ++ch)
+    for (int ch = 0; ch < juce::jmin (2, numOut); ++ch)
         outputPeak[(size_t) ch].store (buffer.getMagnitude (ch, 0, numSamples),
                                        std::memory_order_relaxed);
 }

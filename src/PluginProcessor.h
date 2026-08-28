@@ -2,6 +2,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "params/ParameterLayout.h"
+#include "dsp/DspCore.h"
 #include <array>
 #include <atomic>
 
@@ -55,6 +56,13 @@ public:
     float getInputPeak  (int ch) const noexcept { return read (inputPeak,  ch); }
     float getOutputPeak (int ch) const noexcept { return read (outputPeak, ch); }
 
+    /** For the Phase 3 curve display: the same network the audio path uses, so
+        the drawn curve cannot drift from what is heard. */
+    const frostyeq::EqNetwork& getDisplayNetwork() const noexcept
+    {
+        return dsp.displayNetwork();
+    }
+
 private:
     void parameterChanged (const juce::String& parameterID, float newValue) override;
     void handleAsyncUpdate() override;
@@ -68,23 +76,28 @@ private:
 
     // Resolved once in the constructor. Looking parameters up by string ID on
     // the audio thread would be a hash lookup per block.
-    std::atomic<float>* modelParam       = nullptr;
-    std::atomic<float>* inputGainParam   = nullptr;
-    std::atomic<float>* outputLevelParam = nullptr;
-    std::atomic<float>* mixParam         = nullptr;
-    std::atomic<float>* phaseParam       = nullptr;
-    std::atomic<float>* eqInParam        = nullptr;
-    std::atomic<float>* autoGainParam    = nullptr;
+    // Resolved once in the constructor.
+    std::atomic<float>* modelParam        = nullptr;
+    std::atomic<float>* hfFreqParam       = nullptr;
+    std::atomic<float>* hfGainParam       = nullptr;
+    std::atomic<float>* midFreqParam      = nullptr;
+    std::atomic<float>* midGainParam      = nullptr;
+    std::atomic<float>* midHiQParam       = nullptr;
+    std::atomic<float>* lfFreqParam       = nullptr;
+    std::atomic<float>* lfGainParam       = nullptr;
+    std::atomic<float>* hpfIndexParam     = nullptr;
+    std::atomic<float>* lpfIndexParam     = nullptr;
+    std::atomic<float>* inputGainParam    = nullptr;
+    std::atomic<float>* outputLevelParam  = nullptr;
+    std::atomic<float>* mixParam          = nullptr;
+    std::atomic<float>* phaseParam        = nullptr;
+    std::atomic<float>* eqInParam         = nullptr;
+    std::atomic<float>* autoGainParam     = nullptr;
 
-    // Selectors whose labels depend on the active model.
-    frostyeq::params::PositionalChoice* hfFreqParam  = nullptr;
-    frostyeq::params::PositionalChoice* hpfFreqParam = nullptr;
+    // The high-pass selector's labels depend on the active model.
+    frostyeq::params::PositionalChoice* hpfFreqChoice = nullptr;
 
-    using Smoothed = juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear>;
-    Smoothed inputGainSmoothed, outputLevelSmoothed, mixSmoothed;
-
-    // Preallocated in prepareToPlay; the wet/dry split must not allocate.
-    juce::AudioBuffer<float> dryBuffer;
+    frostyeq::DspCore dsp;
 
     std::array<std::atomic<float>, 2> inputPeak  { };
     std::array<std::atomic<float>, 2> outputPeak { };

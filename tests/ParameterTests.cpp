@@ -71,16 +71,20 @@ int main()
         check (juce::approximatelyEqual (hpf.getValue(), position),
                "switching model must not move the switch position");
 
-        // The 1073's high shelf is fixed at 12 kHz whatever the selector says.
+        // The high-shelf selector reads the same in both models -- only the
+        // 1084 can actually move the shelf, and the clamp lives in the DSP so
+        // the menu does not show three identical entries.
         auto& hf = param (proc, P::kHfFreq);
-        setValue (proc, P::kModel, (float) (int) frostyeq::Model::m1084);
         setValue (proc, P::kHfFreq, 2.0f);
         check (hf.getCurrentValueAsText() == "16 kHz",
-               "1084 HF detent 2 should read '16 kHz', got '" + hf.getCurrentValueAsText() + "'");
+               "HF detent 2 should read '16 kHz', got '" + hf.getCurrentValueAsText() + "'");
 
-        setValue (proc, P::kModel, (float) (int) frostyeq::Model::m1073);
-        check (hf.getCurrentValueAsText() == "12 kHz",
-               "1073 HF is fixed at 12 kHz, got '" + hf.getCurrentValueAsText() + "'");
+        for (int hfPos = 0; hfPos < 3; ++hfPos)
+            check (juce::approximatelyEqual (frostyeq::highShelfFreq (frostyeq::Model::m1073, hfPos), 12000.0f),
+                   "the 1073's shelf is fixed at 12 kHz whatever the selector says");
+
+        check (juce::approximatelyEqual (frostyeq::highShelfFreq (frostyeq::Model::m1084, 2), 16000.0f),
+               "the 1084's shelf should follow the selector");
     }
 
     //== State round-trip ======================================================
