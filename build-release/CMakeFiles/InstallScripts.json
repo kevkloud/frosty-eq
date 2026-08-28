@@ -1,0 +1,11 @@
+{
+	"InstallScripts" : 
+	[
+		"/Users/kloud/Developer/frosty-eq/build-release/cmake_install.cmake",
+		"/Users/kloud/Developer/frosty-eq/build-release/libs/JUCE/cmake_install.cmake",
+		"/Users/kloud/Developer/frosty-eq/build-release/libs/JUCE/modules/cmake_install.cmake",
+		"/Users/kloud/Developer/frosty-eq/build-release/libs/JUCE/extras/Build/cmake_install.cmake",
+		"/Users/kloud/Developer/frosty-eq/build-release/libs/JUCE/extras/Build/juceaide/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

@@ -4,12 +4,34 @@ project(FrostyEQ VERSION 0.1.0 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Dev builds are native arm64. For a release universal binary, configure with
-#   -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
-if(NOT CMAKE_OSX_ARCHITECTURES)
-    set(CMAKE_OSX_ARCHITECTURES "arm64" CACHE STRING "" FORCE)
+# Audio Units are macOS-only; everywhere else it is VST3 plus the standalone.
+set(FROSTY_FORMATS VST3 Standalone)
+
+if(APPLE)
+    list(APPEND FROSTY_FORMATS AU)
+
+    # Dev builds are native arm64. For a release universal binary, configure
+    # with -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+    if(NOT CMAKE_OSX_ARCHITECTURES)
+        set(CMAKE_OSX_ARCHITECTURES "arm64" CACHE STRING "" FORCE)
+    endif()
+
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "" FORCE)
 endif()
-set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "" FORCE)
+
+# Only development builds install into the user's plugin folders. A Release
+# build is for packaging and must not clobber the binary you are testing with.
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(FROSTY_INSTALL_AFTER_BUILD FALSE)
+else()
+    set(FROSTY_INSTALL_AFTER_BUILD TRUE)
+endif()
+
+if(MSVC)
+    # Static runtime, so the plugin does not depend on a redistributable being
+    # installed on the listener's machine.
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
 
 add_subdirectory(libs/JUCE)
 
@@ -18,14 +40,14 @@ juce_add_plugin(FrostyEQ
     BUNDLE_ID                   "com.lt3audio.frostyeq"
     PLUGIN_MANUFACTURER_CODE    LT3a
     PLUGIN_CODE                 Fsty
-    FORMATS                     VST3 AU Standalone
+    FORMATS                     ${FROSTY_FORMATS}
     PRODUCT_NAME                "FrostyEQ"
     IS_SYNTH                    FALSE
     NEEDS_MIDI_INPUT            FALSE
     NEEDS_MIDI_OUTPUT           FALSE
     IS_MIDI_EFFECT              FALSE
     EDITOR_WANTS_KEYBOARD_FOCUS FALSE
-    COPY_PLUGIN_AFTER_BUILD     TRUE
+    COPY_PLUGIN_AFTER_BUILD     ${FROSTY_INSTALL_AFTER_BUILD}
     VST3_CATEGORIES             "Fx" "EQ"
     AU_MAIN_TYPE                kAudioUnitType_Effect)
 

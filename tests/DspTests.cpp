@@ -11,6 +11,7 @@ using namespace frostyeq;
 namespace
 {
     int failures = 0;
+    constexpr double kPi = 3.14159265358979323846;   // kPi is not portable to MSVC
     constexpr double kSampleRate = 48000.0;
 
     void check (bool ok, const std::string& what)
@@ -52,7 +53,7 @@ namespace
     /** Single-frequency DFT by incremental rotation. */
     std::complex<double> dftAt (const std::vector<float>& h, double hz)
     {
-        const auto w = -2.0 * M_PI * hz / kSampleRate;
+        const auto w = -2.0 * kPi * hz / kSampleRate;
         const std::complex<double> step { std::cos (w), std::sin (w) };
         std::complex<double> rot { 1.0, 0.0 }, acc { 0.0, 0.0 };
 
@@ -302,7 +303,7 @@ int main()
         {
             for (int i = 0; i < n; ++i)
             {
-                const auto v = 0.25f * std::sin (2.0f * (float) M_PI * 220.0f * (float) i / 48000.0f);
+                const auto v = 0.25f * std::sin (2.0f * (float) kPi * 220.0f * (float) i / 48000.0f);
                 left[(size_t) i] = right[(size_t) i] = v;
             }
         };

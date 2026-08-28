@@ -1,0 +1,3 @@
+/Users/kloud/Developer/frosty-eq/build-release/vst3_helpers/FrostyEQ/CMakeFiles/vst3_helper.dir
+/Users/kloud/Developer/frosty-eq/build-release/vst3_helpers/FrostyEQ/CMakeFiles/edit_cache.dir
+/Users/kloud/Developer/frosty-eq/build-release/vst3_helpers/FrostyEQ/CMakeFiles/rebuild_cache.dir

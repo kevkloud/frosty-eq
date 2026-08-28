@@ -21,6 +21,7 @@ using namespace frostyeq;
 namespace
 {
     constexpr double kSampleRate = 48000.0;
+    constexpr double kPi = 3.14159265358979323846;   // kPi is not portable to MSVC
 
     EqNetwork make (const EqSettings& s)
     {
@@ -53,7 +54,7 @@ namespace
             const auto h  = net.responseAt (hz);
 
             std::printf ("%9.1f  %+9.2f  %+9.1f\n",
-                         hz, net.magnitudeDbAt (hz), std::arg (h) * 180.0 / M_PI);
+                         hz, net.magnitudeDbAt (hz), std::arg (h) * 180.0 / kPi);
         }
 
         std::printf ("\nbroadband gain: %+.2f dB\n", 20.0 * std::log10 (net.broadbandGain()));
