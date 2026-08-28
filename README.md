@@ -35,7 +35,25 @@ cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build --parallel
 ```
 
-Built plugins are copied to `~/Library/Audio/Plug-Ins/` automatically.
+Built plugins are copied to `~/Library/Audio/Plug-Ins/` automatically. Use
+`./scripts/build.sh` instead of raw `cmake --build` -- it verifies the copy
+actually landed, which it silently will not do while Ableton Live is running.
+
+### Iterating
+
+Live hosts plugins in-process on macOS, so once it has instantiated the plugin
+it keeps that binary mapped. Rescan (`Cmd+,` -> Plug-Ins -> Rescan) refreshes
+Live's database but does not swap loaded code -- picking up a code change means
+quitting Live and reopening it.
+
+So do not iterate through Live. Use the standalone build, which needs no scan,
+no restart, and can be attached to a debugger:
+
+```bash
+./scripts/build.sh --run
+```
+
+Load into Live at phase boundaries, to check real host integration.
 
 For a release universal binary, configure with
 `-DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"`.
