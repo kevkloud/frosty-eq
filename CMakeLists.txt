@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(ClassicEQ VERSION 0.1.0 LANGUAGES C CXX)
+project(FrostyEQ VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -13,13 +13,13 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "" FORCE)
 
 add_subdirectory(libs/JUCE)
 
-juce_add_plugin(ClassicEQ
-    COMPANY_NAME                "Kloud Audio"
-    BUNDLE_ID                   "com.kloudaudio.classiceq"
-    PLUGIN_MANUFACTURER_CODE    Kld1
-    PLUGIN_CODE                 Ceq1
+juce_add_plugin(FrostyEQ
+    COMPANY_NAME                "LT3 Audio"
+    BUNDLE_ID                   "com.lt3audio.frostyeq"
+    PLUGIN_MANUFACTURER_CODE    LT3a
+    PLUGIN_CODE                 Fsty
     FORMATS                     VST3 AU Standalone
-    PRODUCT_NAME                "ClassicEQ"
+    PRODUCT_NAME                "FrostyEQ"
     IS_SYNTH                    FALSE
     NEEDS_MIDI_INPUT            FALSE
     NEEDS_MIDI_OUTPUT           FALSE
@@ -29,21 +29,20 @@ juce_add_plugin(ClassicEQ
     VST3_CATEGORIES             "Fx" "EQ"
     AU_MAIN_TYPE                kAudioUnitType_Effect)
 
-target_sources(ClassicEQ PRIVATE
+target_sources(FrostyEQ PRIVATE
     src/PluginProcessor.cpp
-    src/PluginEditor.cpp)
+    src/PluginEditor.cpp
+    src/params/ParameterLayout.cpp)
 
-target_include_directories(ClassicEQ PRIVATE src)
+target_include_directories(FrostyEQ PRIVATE src)
 
-target_compile_definitions(ClassicEQ PUBLIC
+target_compile_definitions(FrostyEQ PUBLIC
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
     JUCE_VST3_CAN_REPLACE_VST2=0
-    JUCE_REPORT_APP_USAGE=0
-    # Permitted: we are using JUCE under the AGPLv3 branch of its dual licence.
-    JUCE_DISPLAY_SPLASH_SCREEN=0)
+    JUCE_REPORT_APP_USAGE=0)
 
-target_link_libraries(ClassicEQ
+target_link_libraries(FrostyEQ
     PRIVATE
         juce::juce_audio_utils
         juce::juce_dsp
@@ -51,3 +50,28 @@ target_link_libraries(ClassicEQ
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags)
+
+#==============================================================================
+# Tests. The DSP and parameter layer are deliberately host-agnostic, so they can
+# be driven directly here without instantiating a plugin host.
+#==============================================================================
+enable_testing()
+
+# A plain executable rather than juce_add_console_app: the latter forces
+# JUCE_STANDALONE_APPLICATION=1, which collides with the definitions the plugin
+# target exports.
+add_executable(FrostyEQTests tests/ParameterTests.cpp)
+
+target_include_directories(FrostyEQTests PRIVATE src)
+# The plugin links its JUCE modules PRIVATE, so they do not propagate through
+# the shared-code target; the test binary needs them named explicitly.
+target_link_libraries(FrostyEQTests PRIVATE
+    FrostyEQ
+    juce::juce_audio_utils
+    juce::juce_audio_processors
+    juce::juce_dsp
+    juce::juce_events
+    juce::juce_recommended_config_flags
+    juce::juce_recommended_warning_flags)
+
+add_test(NAME parameters COMMAND FrostyEQTests)

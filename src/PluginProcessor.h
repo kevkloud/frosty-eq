@@ -1,20 +1,22 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "params/ParameterLayout.h"
+#include <array>
 #include <atomic>
 
 //==============================================================================
-/** Phase 0 skeleton: a single gain parameter, wired through APVTS.
-
-    The structure here is deliberately the one we keep: parameters live in an
-    AudioProcessorValueTreeState, the editor is decoupled from DSP state, and
-    metering values cross the thread boundary through atomics only.
+/** Phase 1: the full parameter schema is in place and the level/routing path is
+    live. The EQ bands are declared but do not yet filter anything — that is
+    Phase 2 (the admittance-summed LC network in dsp/EqNetwork).
 */
-class ClassicEqAudioProcessor final : public juce::AudioProcessor
+class FrostyEqAudioProcessor final : public juce::AudioProcessor,
+                                     private juce::AudioProcessorValueTreeState::Listener,
+                                     private juce::AsyncUpdater
 {
 public:
-    ClassicEqAudioProcessor();
-    ~ClassicEqAudioProcessor() override = default;
+    FrostyEqAudioProcessor();
+    ~FrostyEqAudioProcessor() override;
 
     //== AudioProcessor ========================================================
     void prepareToPlay (double sampleRate, int maximumExpectedSamplesPerBlock) override;
@@ -41,27 +43,51 @@ public:
     void setStateInformation (const void*, int) override;
 
     //== Ours ==================================================================
-    juce::AudioProcessorValueTreeState& getApvts() noexcept   { return apvts; }
+    juce::AudioProcessorValueTreeState& getApvts() noexcept  { return apvts; }
 
-    /** Post-processing peak level, written by the audio thread and polled by
-        the editor on a timer. Never read DSP state from the message thread. */
-    float getOutputPeak (int channel) const noexcept
+    frostyeq::Model getCurrentModel() const noexcept
     {
-        return outputPeak[(size_t) juce::jlimit (0, 1, channel)].load (std::memory_order_relaxed);
+        return (frostyeq::Model) (int) modelParam->load (std::memory_order_relaxed);
     }
 
+    /** Metering, written by the audio thread and polled by the editor on a
+        timer. Publish-and-sample; never push from audio to UI. */
+    float getInputPeak  (int ch) const noexcept { return read (inputPeak,  ch); }
+    float getOutputPeak (int ch) const noexcept { return read (outputPeak, ch); }
+
 private:
-    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    void parameterChanged (const juce::String& parameterID, float newValue) override;
+    void handleAsyncUpdate() override;
+
+    static float read (const std::array<std::atomic<float>, 2>& a, int ch) noexcept
+    {
+        return a[(size_t) juce::jlimit (0, 1, ch)].load (std::memory_order_relaxed);
+    }
 
     juce::AudioProcessorValueTreeState apvts;
 
-    // Cached raw pointer into APVTS. Looking parameters up by string ID on the
-    // audio thread would be a hash lookup per block; resolve it once instead.
-    std::atomic<float>* gainDbParam = nullptr;
+    // Resolved once in the constructor. Looking parameters up by string ID on
+    // the audio thread would be a hash lookup per block.
+    std::atomic<float>* modelParam       = nullptr;
+    std::atomic<float>* inputGainParam   = nullptr;
+    std::atomic<float>* outputLevelParam = nullptr;
+    std::atomic<float>* mixParam         = nullptr;
+    std::atomic<float>* phaseParam       = nullptr;
+    std::atomic<float>* eqInParam        = nullptr;
+    std::atomic<float>* autoGainParam    = nullptr;
 
-    juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> gainSmoothed;
+    // Selectors whose labels depend on the active model.
+    frostyeq::params::PositionalChoice* hfFreqParam  = nullptr;
+    frostyeq::params::PositionalChoice* hpfFreqParam = nullptr;
 
+    using Smoothed = juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear>;
+    Smoothed inputGainSmoothed, outputLevelSmoothed, mixSmoothed;
+
+    // Preallocated in prepareToPlay; the wet/dry split must not allocate.
+    juce::AudioBuffer<float> dryBuffer;
+
+    std::array<std::atomic<float>, 2> inputPeak  { };
     std::array<std::atomic<float>, 2> outputPeak { };
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ClassicEqAudioProcessor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (FrostyEqAudioProcessor)
 };

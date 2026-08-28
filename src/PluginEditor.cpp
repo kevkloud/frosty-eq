@@ -1,7 +1,7 @@
 #include "PluginEditor.h"
 
-ClassicEqAudioProcessorEditor::ClassicEqAudioProcessorEditor (ClassicEqAudioProcessor& p)
-    : juce::AudioProcessorEditor (&p), processorRef (p), generic (p)
+FrostyEqAudioProcessorEditor::FrostyEqAudioProcessorEditor (FrostyEqAudioProcessor& p)
+    : juce::AudioProcessorEditor (&p), generic (p)
 {
     addAndMakeVisible (generic);
     setResizable (true, true);
@@ -9,12 +9,12 @@ ClassicEqAudioProcessorEditor::ClassicEqAudioProcessorEditor (ClassicEqAudioProc
     setSize (520, 260);
 }
 
-void ClassicEqAudioProcessorEditor::paint (juce::Graphics& g)
+void FrostyEqAudioProcessorEditor::paint (juce::Graphics& g)
 {
     g.fillAll (getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId));
 }
 
-void ClassicEqAudioProcessorEditor::resized()
+void FrostyEqAudioProcessorEditor::resized()
 {
     generic.setBounds (getLocalBounds());
 }
