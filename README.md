@@ -43,17 +43,46 @@ folded images sit at -111 dB at the default 2x.
 ./build/measure profile
 ```
 
-The mid band's Q is derived per switch position from the circuit rather than
-being one constant. A series LC branch has Q = w0 * L / R, and the mid band
-does not switch its components uniformly: the lower three positions switch
-inductance as well as capacitance (taps of 10 H, 7 H and 3 H), holding Q
-roughly level, while the upper three share one 200 mH winding and switch
-capacitance alone, so Q climbs with frequency. 360 Hz comes out broad at 2.6
-octaves; 7.2 kHz is a focused presence peak at 1.0. Each detent peaks within a
-couple of percent of its marked frequency.
+## Curve calibration
+
+Every branch constant is either fitted to a measurement or chosen for a stated
+reason. They began as estimates and the difference mattered -- the mid band was
+up to 15.8 % off its marked frequency, and the high-pass carried a 0.87 dB
+resonance the hardware does not have.
+
+Targets are traced from response plots of an assembled board published with the
+[Nyan-1073-EQ](https://github.com/ravettel/Nyan-1073-EQ) hardware project
+(CC BY-SA 4.0), read by calibrating against the plot axes and following each
+curve by colour rather than by eye.
+
+**Mid band.** Q is set per switch position. The circuit does not switch the
+band uniformly: the lower three positions switch inductance as well as
+capacitance, holding Q roughly level, while the upper three share one winding
+and switch capacitance alone, so Q climbs with frequency. Realised -3 dB widths
+at +18 dB land on the measured figures exactly -- 1.13, 1.00, 1.06, 1.15, 0.74
+and 0.52 octaves -- so 360 Hz is broad and musical and 7.2 kHz is a focused
+presence peak. Every detent peaks within 0.6 % of its marked frequency, tighter
+than the board that was measured, whose own peaks sit up to 6.6 % off.
+
+**Shelves.** Half first order, half second. Purely first order is too shallow
+at 4.9 dB/octave against a measured 7.0; purely second order carves a 6.5 dB
+hole an octave from a 12 dB boost. The blend gives 6.4 to 6.9 and brings the
+-3 dB corners inside 6 % of their marked frequencies.
+
+**High-pass.** Third-order Butterworth: one real pole and a pair at Q = 1.0.
+Maximally flat, which is what the hardware measures -- no peak whatever.
+Asymptotic slope 18.00 dB/octave against the quoted 18.
+
+That board is one reference, not ground truth: its shelves measure +18 to
++21 dB where the unit is specified at +/-16. Where its figures conflict with
+the published specification the specification wins, and each such point is
+noted in `ModelTables.h`.
 
 ```bash
-./build/measure bell
+./build/measure bell     # realised centre and width, per mid detent
+./build/measure fitq     # solve branch Q from a measured width
+./build/measure shelf    # shelf slope, corner and dip
+./build/measure hpf      # high-pass corner, slope and resonance
 ```
 
 ## Interface

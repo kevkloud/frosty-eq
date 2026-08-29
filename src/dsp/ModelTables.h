@@ -50,12 +50,23 @@ inline constexpr std::array<float, 5> kLpfFreqs1084 { 6000.0f, 8000.0f, 10000.0f
 //==============================================================================
 // Branch Q values.
 //
-// PROVISIONAL. The *structure* of the EQ (see EqNetwork) follows the topology
-// of the original: a set of resonant branches sharing one feedback path, which
-// is what produces band interaction and proportional Q. These Q numbers, by
-// contrast, are first-pass estimates chosen to land near the published curve
-// shapes. They are the main thing to refine against measured targets once the
-// scipy analysis in tools/python is in place.
+// The structure of the EQ (see EqNetwork) follows the topology of the original:
+// a set of resonant branches sharing one feedback path, which is what produces
+// band interaction and proportional Q. The numbers below set what those
+// branches do, and every one of them is now either fitted to a measurement or
+// chosen for a stated reason -- they began as estimates, and the difference
+// mattered: the mid band was up to 15.8 % off its marked frequency and the
+// high-pass had a 0.87 dB resonance that does not exist.
+//
+// The measurements are traced from response plots of an assembled board
+// published with the Nyan-1073-EQ hardware project (CC BY-SA 4.0), read by
+// calibrating against the plot axes and following each curve by colour. The
+// `measure` tool reproduces every comparison: `bell`, `fitq`, `shelf`, `hpf`.
+//
+// That board is one reference, not ground truth. Its shelves measure +18 to
+// +21 dB where the unit is specified at +/-16, so where its figures conflict
+// with the published specification the specification wins; this is noted at
+// each point where it happens.
 //==============================================================================
 
 //------------------------------------------------------------------------------
@@ -88,8 +99,7 @@ inline constexpr std::array<float, 6> kMidBranchQ { 1.39f, 1.59f, 1.49f, 1.31f, 
 /** The 1084's Hi-Q switch narrows the mid band; it scales whatever the
     position's Q already is rather than replacing it. */
 inline constexpr float kMidHiQFactor = 2.0f;
-inline constexpr float kLowShelfQ  = 0.85f;  // >0.707 gives the inductor shelf's slight dip
-inline constexpr float kHighShelfQ = 0.75f;
+
 // The high-pass is third order: one real pole plus a complex pair. A pair at
 // Q = 1.0 alongside a coincident real pole is third-order Butterworth, which is
 // maximally flat. That is what the hardware measures -- response plots of an
