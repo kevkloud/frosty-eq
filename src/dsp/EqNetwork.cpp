@@ -34,7 +34,8 @@ void EqNetwork::reset() noexcept
 
     hpf1.reset();
     hpf2.reset();
-    lpf.reset();
+    lpf1.reset();
+    lpf2.reset();
 }
 
 //==============================================================================
@@ -77,7 +78,13 @@ void EqNetwork::setSettings (const EqSettings& s) noexcept
     lpfActive = s.lpfFreqHz > 0.0f && s.model == Model::m1084;
 
     if (lpfActive)
-        lpf.setCutoff (clampCutoff (s.lpfFreqHz, sampleRate), kLpfQ, sampleRate);
+    {
+        // 18 dB/octave, as the manual specifies: a real pole plus a resonant
+        // pair, the mirror of the high-pass.
+        const auto hz = clampCutoff (s.lpfFreqHz, sampleRate);
+        lpf1.setCutoff (hz, sampleRate);
+        lpf2.setCutoff (hz, kLpfQ, sampleRate);
+    }
 }
 
 //==============================================================================
@@ -115,7 +122,7 @@ float EqNetwork::processSample (float x) noexcept
     highBranch.update (u);
 
     if (lpfActive)
-        y = lpf.processLowpass (y);
+        y = lpf2.processLowpass (lpf1.process (OnePole::Output::lowpass, y));
 
     return y;
 }
@@ -145,7 +152,8 @@ std::complex<double> EqNetwork::responseAt (double frequencyHz) const noexcept
            * hpf2.responseAt (Svf::Output::highpass, frequencyHz, sampleRate);
 
     if (lpfActive)
-        h *= lpf.responseAt (Svf::Output::lowpass, frequencyHz, sampleRate);
+        h *= lpf1.responseAt (OnePole::Output::lowpass, frequencyHz, sampleRate)
+           * lpf2.responseAt (Svf::Output::lowpass,     frequencyHz, sampleRate);
 
     return h;
 }

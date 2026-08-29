@@ -93,6 +93,29 @@ uv venv && uv pip install pillow numpy
 ./build/measure hpf      # high-pass corner, slope and resonance
 ```
 
+## The two modules
+
+The 1084 is the 1073 with more options, and the differences come from the
+Neve 1073 & 1084 user manual (issue 5) rather than from retailer copy:
+
+| | 1073 | 1084 |
+|---|---|---|
+| High shelf | 12 kHz fixed, +/-16 dB | 10k / 12k / 16k, +/-16 dB |
+| Mid | +/-18 dB, fixed Q | +/-18 dB, switchable Hi-Q |
+| Low shelf | 35 / 60 / 110 / 220 Hz, +/-16 dB | same |
+| High pass | 18 dB/oct, 50 / 80 / 160 / 300 Hz | 18 dB/oct, 45 / 70 / 160 / 360 Hz |
+| Low pass | none | 18 dB/oct, 6 / 8 / 10 / 14 / 18 kHz |
+
+Two things worth flagging. The high-pass frequencies above are the original
+module's; AMS Neve's current page specifies the 1084 reissue with the 1073's
+set, so both figures are correct for different units and these follow the
+original. And the manual specifies the 1084's mid as "+/-12dB or +/-18dB
+peaking with switchable 'High Q'" without saying which range goes with which Q
+-- that is not modelled, and why is in `ModelTables.h`.
+
+In 1073 mode the controls the module does not have stay on the panel but grey
+out, and the DSP ignores them, so automation survives a model switch.
+
 ## Cost
 
 Stereo, 48 kHz, measured as a fraction of one core on Apple silicon:

@@ -110,9 +110,12 @@ private:
     std::array<float, kNumBands> gain      { 1.0f, 1.0f, 1.0f };   // g_i
     std::array<float, kNumBands> gainRecip { 1.0f, 1.0f, 1.0f };   // 1/g_i
 
-    Svf     hpf2;      // second-order part of the 18 dB/oct high-pass
-    OnePole hpf1;      // first-order part
-    Svf     lpf;
+    // Both filters are 18 dB/octave, so both are third order: a real pole plus
+    // a complex pair.
+    OnePole hpf1;
+    Svf     hpf2;
+    OnePole lpf1;
+    Svf     lpf2;
 
     bool hpfActive = false;
     bool lpfActive = false;

@@ -834,6 +834,130 @@ int main()
                "Hi-Q should clearly narrow the mid band");
     }
 
+
+    //== 18. The 1084 is a superset, and the 1073 ignores what it lacks =====
+    {
+        // Low-pass: 1084 only, and 18 dB/octave like the high-pass. It was a
+        // second-order 12 dB/octave section until the manual was checked.
+        {
+            EqSettings s;
+            s.model     = Model::m1084;
+            s.lpfFreqHz = 6000.0f;
+
+            // Well above the host rate, so bilinear warping does not flatter
+            // the measurement; the asymptote is what the 18 dB/octave refers to.
+            EqNetwork wide;
+            wide.prepare (768000.0);
+            wide.setSettings (s);
+
+            const auto perOctave = wide.magnitudeDbAt (24000.0) - wide.magnitudeDbAt (12000.0);
+            checkClose (perOctave, -18.0, 1.0, "the 1084 low-pass should fall 18 dB per octave");
+
+            checkClose (wide.magnitudeDbAt (6000.0), -3.0, 0.35,
+                        "the low-pass should be 3 dB down at its marked frequency");
+
+            double peak = -100.0;
+            for (int i = 0; i < 1200; ++i)
+                peak = std::max (peak, wide.magnitudeDbAt (20.0 * std::pow (1000.0, (double) i / 1199.0)));
+
+            check (peak < 0.1, "the low-pass must not resonate, got " + std::to_string (peak) + " dB");
+        }
+
+        // The same setting does nothing on a 1073, which has no low-pass.
+        {
+            EqSettings s;
+            s.model     = Model::m1073;
+            s.lpfFreqHz = 6000.0f;
+            auto net = makeNetwork (s);
+
+            checkClose (net.magnitudeDbAt (15000.0), 0.0, 0.05,
+                        "a 1073 must ignore the low-pass entirely");
+        }
+
+        // High shelf: three frequencies on the 1084, fixed at 12 kHz on a 1073.
+        {
+            for (int position = 0; position < 3; ++position)
+                checkClose (highShelfFreq (Model::m1084, position),
+                            kHighShelfFreqs1084[(size_t) position], 1.0,
+                            "the 1084 high shelf should follow its selector");
+
+            for (int position = 0; position < 3; ++position)
+                checkClose (highShelfFreq (Model::m1073, position), 12000.0, 1.0,
+                            "the 1073 high shelf is fixed at 12 kHz");
+
+            EqSettings a; a.model = Model::m1084; a.hfFreqHz = 10000.0f; a.hfGainDb = 12.0f;
+            EqSettings b = a; b.hfFreqHz = 16000.0f;
+
+            auto low = makeNetwork (a);
+            auto high = makeNetwork (b);
+
+            check (low.magnitudeDbAt (8000.0) > high.magnitudeDbAt (8000.0) + 1.0,
+                   "a 10 kHz shelf should lift 8 kHz more than a 16 kHz one does");
+        }
+
+        // High-pass: the two modules put different frequencies on the same
+        // detents. These are the original module's figures; the current
+        // reissue is specified with the 1073's set.
+        {
+            const float expected1073[4] { 50.0f, 80.0f, 160.0f, 300.0f };
+            const float expected1084[4] { 45.0f, 70.0f, 160.0f, 360.0f };
+
+            for (int position = 1; position <= 4; ++position)
+            {
+                checkClose (hpfFreq (Model::m1073, position), expected1073[position - 1], 0.5,
+                            "1073 high-pass detent " + std::to_string (position));
+                checkClose (hpfFreq (Model::m1084, position), expected1084[position - 1], 0.5,
+                            "1084 high-pass detent " + std::to_string (position));
+            }
+
+            check (hpfFreq (Model::m1073, 0) == 0.0f && hpfFreq (Model::m1084, 0) == 0.0f,
+                   "detent 0 is Off on both");
+        }
+
+        // Hi-Q narrows the mid, and only on the 1084.
+        {
+            EqSettings s;
+            s.model = Model::m1073;
+            s.midFreqHz = 1600.0f;
+            s.midGainDb = 12.0f;
+
+            auto plain = makeNetwork (s);
+            s.midHiQ = true;
+            auto ignored = makeNetwork (s);
+
+            checkClose (bellWidthOctaves (ignored, 1600.0, 3.0),
+                        bellWidthOctaves (plain, 1600.0, 3.0), 0.01,
+                        "a 1073 must ignore Hi-Q, which it does not have");
+
+            s.model = Model::m1084;
+            auto narrow = makeNetwork (s);
+            s.midHiQ = false;
+            auto wide = makeNetwork (s);
+
+            const auto narrowOct = bellWidthOctaves (narrow, 1600.0, 3.0);
+            const auto wideOct   = bellWidthOctaves (wide, 1600.0, 3.0);
+
+            check (narrowOct < wideOct * 0.75,
+                   "Hi-Q should clearly narrow the 1084's mid ("
+                       + std::to_string (wideOct) + " to " + std::to_string (narrowOct)
+                       + " octaves)");
+
+            // Both still peak where the panel says.
+            for (auto* net : { &narrow, &wide })
+            {
+                double best = -1.0e9, peak = 1600.0;
+                for (int i = 0; i < 3000; ++i)
+                {
+                    const auto hz = 1600.0 * std::pow (2.0, -1.5 + 3.0 * i / 2999.0);
+                    const auto db = net->magnitudeDbAt (hz);
+                    if (db > best) { best = db; peak = hz; }
+                }
+                checkClose (peak, 1600.0, 1600.0 * 0.025,
+                            "Hi-Q must not detune the mid band");
+            }
+        }
+    }
+
     if (failures == 0)
         std::cout << "All DSP tests passed.\n";
 
