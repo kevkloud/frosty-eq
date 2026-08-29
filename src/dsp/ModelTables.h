@@ -70,12 +70,20 @@ inline constexpr std::array<float, 5> kLpfFreqs1084 { 6000.0f, 8000.0f, 10000.0f
 // while 7.2 kHz is a focused presence peak -- behaviour a single Q constant
 // cannot produce, and this model previously did not have.
 //
-// R is not published, so each group is anchored by one measurement: the lower
-// group so that 1.6 kHz lands at Q = 1.20, which is where measurements of real
-// units put it, and the upper group just below that at the inductor change.
+// R is not published, so the absolute values come from measurement rather than
+// from that reasoning: each figure below is solved so the realised -3 dB bell
+// width at +18 dB matches a response plot traced from the Nyan-1073-EQ hardware
+// project (CC BY-SA 4.0), which measured an assembled board. `measure fitq`
+// reproduces the solve.
+//
+// The result supports the reasoning above without being derived from it: the
+// lower three land roughly level at 1.39, 1.59 and 1.49, while the upper three
+// climb steadily, 1.31 to 2.02 to 2.68. The circuit explains the shape; the
+// measurement fixes the values. Deriving the values from w0 * L alone came out
+// uniformly broad -- a realised Q of 0.83 at 360 Hz against a measured 1.24.
 //------------------------------------------------------------------------------
 
-inline constexpr std::array<float, 6> kMidBranchQ { 0.90f, 1.22f, 1.20f, 1.15f, 1.72f, 2.59f };
+inline constexpr std::array<float, 6> kMidBranchQ { 1.39f, 1.59f, 1.49f, 1.31f, 2.02f, 2.68f };
 
 /** The 1084's Hi-Q switch narrows the mid band; it scales whatever the
     position's Q already is rather than replacing it. */

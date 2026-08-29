@@ -46,9 +46,11 @@ void EqNetwork::setSettings (const EqSettings& s) noexcept
 
     lowBranch .setCutoff (clampCutoff (s.lfFreqHz, sampleRate), sampleRate);
     highBranch.setCutoff (clampCutoff (hfHz,       sampleRate), sampleRate);
-    midBranch .setCutoff (clampCutoff (s.midFreqHz, sampleRate),
-                          midBranchQ (s.midFreqHz, s.midHiQ && s.model == Model::m1084),
-                          sampleRate);
+    const auto midQ = s.midQ > 0.0f
+                        ? s.midQ
+                        : midBranchQ (s.midFreqHz, s.midHiQ && s.model == Model::m1084);
+
+    midBranch .setCutoff (clampCutoff (s.midFreqHz, sampleRate), midQ, sampleRate);
 
     const float gains[kNumBands] { dbToGain (s.lfGainDb),
                                    dbToGain (s.midGainDb),

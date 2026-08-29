@@ -18,6 +18,11 @@ struct EqSettings
     float midGainDb  = 0.0f;
     bool  midHiQ     = false;
 
+    /** Branch Q for the mid band. Zero or less means derive it from the centre
+        frequency, which is what everything except the calibration solver
+        wants. */
+    float midQ       = 0.0f;
+
     float lfFreqHz   = 60.0f;
     float lfGainDb   = 0.0f;
 

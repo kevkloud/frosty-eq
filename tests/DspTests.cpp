@@ -699,11 +699,34 @@ int main()
 
             const auto errorPercent = 100.0 * (peak - nominal) / nominal;
 
-            check (std::abs (errorPercent) < 4.0,
+            check (std::abs (errorPercent) < 2.5,
                    "the mid bell should peak within a few percent of its marked frequency ("
                        + std::to_string ((int) nominal) + " Hz reads "
                        + std::to_string ((int) peak) + " Hz, "
                        + std::to_string (errorPercent) + " %)");
+        }
+    }
+
+    //== 16b. Bell widths match the measured hardware =======================
+    // Regression guard on the calibration. Targets are realised -3 dB widths
+    // at +18 dB, traced from a response plot of an assembled board published
+    // with the Nyan-1073-EQ hardware project (CC BY-SA 4.0). `measure fitq`
+    // solves the branch Q values from these.
+    {
+        const double target[6] { 1.13, 1.00, 1.06, 1.15, 0.74, 0.52 };
+
+        for (int position = 0; position < 6; ++position)
+        {
+            EqSettings s;
+            s.midFreqHz = kMidFreqs[(size_t) position];
+            s.midGainDb = 18.0f;
+            auto net = makeNetwork (s);
+
+            const auto width = bellWidthOctaves (net, kMidFreqs[(size_t) position], 3.0);
+
+            checkClose (width, target[position], 0.06,
+                        "bell width at " + std::to_string ((int) kMidFreqs[(size_t) position])
+                            + " Hz should match the measured hardware");
         }
     }
 

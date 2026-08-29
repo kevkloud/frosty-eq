@@ -323,6 +323,70 @@ namespace
         }
     }
 
+    /** Solve for the branch Q that reproduces a measured bell width.
+
+        The realised width is not the branch Q: the shared feedback path and
+        the gain setting both act on it. So rather than converting by hand,
+        bisect on the branch value until the model's own realised width matches
+        the target. Targets are taken from measurements of a built unit. */
+    void printFitQ()
+    {
+        // Realised -3 dB width in octaves at +18 dB, traced from the response
+        // plots published with the Nyan-1073-EQ hardware project (CC BY-SA
+        // 4.0), which measured an assembled board.
+        const double target[6] { 1.13, 1.00, 1.06, 1.15, 0.74, 0.52 };
+
+        std::printf ("Branch Q solved against measured bell widths (+18 dB, -3 dB points).\n\n"
+                     "%8s %10s %10s %10s\n", "Hz", "target oct", "solved Q", "got oct");
+
+        for (int position = 0; position < 6; ++position)
+        {
+            const auto hz = (double) kMidFreqs[(size_t) position];
+
+            const auto widthFor = [&] (double q)
+            {
+                EqSettings s;
+                s.midFreqHz = (float) hz;
+                s.midGainDb = 18.0f;
+                s.midQ      = (float) q;
+                auto net = make (s);
+
+                double best = -1.0e9, peak = hz;
+                for (int i = 0; i < 4000; ++i)
+                {
+                    const auto f = hz * std::pow (2.0, -2.0 + 4.0 * i / 3999.0);
+                    const auto db = net.magnitudeDbAt (f);
+                    if (db > best) { best = db; peak = f; }
+                }
+
+                const auto thr = best - 3.0;
+                const auto edge = [&] (double dir)
+                {
+                    double f = peak;
+                    for (int i = 0; i < 9000; ++i)
+                    {
+                        f *= std::pow (2.0, dir * 0.0005);
+                        if (f < 10.0 || f > 23000.0 || net.magnitudeDbAt (f) < thr) break;
+                    }
+                    return f;
+                };
+
+                return std::log2 (edge (1.0) / edge (-1.0));
+            };
+
+            // Width falls as Q rises, so bisect on that.
+            double lo = 0.3, hi = 8.0;
+            for (int i = 0; i < 40; ++i)
+            {
+                const auto mid = 0.5 * (lo + hi);
+                if (widthFor (mid) > target[position]) lo = mid; else hi = mid;
+            }
+
+            const auto q = 0.5 * (lo + hi);
+            std::printf ("%8.0f %10.2f %10.2f %10.2f\n", hz, target[position], q, widthFor (q));
+        }
+    }
+
     void printQ()
     {
         std::printf ("Proportional Q: realised mid-bell width at 1.6 kHz, measured 3 dB\n"
@@ -365,6 +429,7 @@ int main (int argc, char** argv)
     if (command == "q")       { printQ();           return 0; }
     if (command == "alias")   { printAliasing();    return 0; }
     if (command == "bell")    { printBell();        return 0; }
+    if (command == "fitq")    { printFitQ();        return 0; }
 
     if (command == "thd" || command == "profile")
     {
