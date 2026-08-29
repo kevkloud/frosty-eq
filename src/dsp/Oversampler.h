@@ -34,7 +34,13 @@ public:
         downOdd.fill (0.0f);
     }
 
-    /** One input sample becomes two. */
+    /** One input sample becomes two.
+
+        Only the odd branch needs a convolution. A half-band filter's even-index
+        taps are all exactly zero apart from the centre one -- that is what makes
+        it a half-band -- so the even branch reduces to a scaled tap off the
+        delay line, and the loop that used to run over it was multiplying two
+        dozen zeros every sample. */
     void upsample (float x, float& first, float& second) noexcept
     {
         for (int i = kHalf - 1; i > 0; --i)
@@ -43,9 +49,9 @@ public:
         upLine[0] = x;
 
         // Zero-stuffing puts the input on the even phase, so the two output
-        // samples are just the two polyphase branches of the same delay line.
-        first  = 2.0f * dot (even, upLine, evenCount);
-        second = 2.0f * dot (odd,  upLine, oddCount);
+        // samples are the two polyphase branches of the same delay line.
+        first  = 2.0f * centreTap * upLine[(size_t) centreIndex];
+        second = 2.0f * dot (odd, upLine, oddCount);
     }
 
     /** Two input samples become one. */
@@ -61,7 +67,8 @@ public:
         downOdd [0] = second;
 
         // The odd phase of the decimator lags the even phase by one sample.
-        return dot (even, downEven, evenCount) + dotOffset (odd, downOdd, oddCount);
+        return centreTap * downEven[(size_t) centreIndex]
+             + dotOffset (odd, downOdd, oddCount);
     }
 
 private:
@@ -95,13 +102,19 @@ private:
         for (auto& v : h)
             v /= sum;                      // unity at DC
 
-        evenCount = oddCount = 0;
+        oddCount = 0;
 
-        for (int n = 0; n < kTaps; ++n)
-        {
-            if (n % 2 == 0) even[(size_t) evenCount++] = (float) h[(size_t) n];
-            else            odd [(size_t) oddCount++]  = (float) h[(size_t) n];
-        }
+        for (int n = 1; n < kTaps; n += 2)
+            odd[(size_t) oddCount++] = (float) h[(size_t) n];
+
+        // The even branch is a single tap. Every even-index coefficient of a
+        // half-band filter is exactly zero apart from the centre one -- that is
+        // what makes it a half-band -- so the loop that used to run over them
+        // was multiplying two dozen zeros per sample. If the window or the
+        // cutoff ever changes so that this stops holding, the alias-rejection
+        // and flat-response tests will catch it.
+        centreIndex = m / 4;
+        centreTap   = (float) h[(size_t) (m / 2)];
     }
 
     static float dot (const std::array<float, kHalf>& taps,
@@ -126,8 +139,12 @@ private:
         return acc;
     }
 
-    std::array<float, kHalf> even {}, odd {};
-    int evenCount = 0, oddCount = 0;
+    std::array<float, kHalf> odd {};
+    int oddCount = 0;
+
+    // The even branch collapses to one coefficient; see design().
+    float centreTap = 0.5f;
+    int   centreIndex = 0;
 
     std::array<float, kHalf> upLine {}, downEven {}, downOdd {};
 };

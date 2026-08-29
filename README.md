@@ -85,6 +85,22 @@ noted in `ModelTables.h`.
 ./build/measure hpf      # high-pass corner, slope and resonance
 ```
 
+## Cost
+
+Stereo, 48 kHz, measured as a fraction of one core on Apple silicon:
+
+| oversampling | % of a core |
+|---|---|
+| Off | 0.94 |
+| 2x (default) | 4.75 |
+| 4x | 9.4 |
+| 8x | 18.1 |
+
+Roughly 57 % of that is the four saturating stages, which evaluate an
+antiderivative in double precision per sample; the anti-imaging filters are
+about a fifth, and the equaliser the rest. Off is there for when a session is
+tight -- anti-aliasing still runs, it just runs at the host rate.
+
 ## Interface
 
 The control layout follows the hardware, so anyone who has used a 1073 knows
