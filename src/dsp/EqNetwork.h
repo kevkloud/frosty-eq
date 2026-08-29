@@ -101,10 +101,11 @@ private:
 
     double sampleRate = 44100.0;
 
-    // Shelving branches are first order; the mid is a second-order resonant
-    // branch, as the LC tank in the original is. See Svf.h/OnePole.
-    OnePole lowBranch, highBranch;
-    Svf     midBranch;
+    // Shelving branches are mostly first order with a measured amount of
+    // second order blended in; the mid is a fully resonant branch, as the LC
+    // tank in the original is. See Svf.h.
+    ShelfBranch lowBranch, highBranch;
+    Svf         midBranch;
 
     std::array<float, kNumBands> gain      { 1.0f, 1.0f, 1.0f };   // g_i
     std::array<float, kNumBands> gainRecip { 1.0f, 1.0f, 1.0f };   // 1/g_i

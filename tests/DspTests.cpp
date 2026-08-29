@@ -272,10 +272,12 @@ int main()
         }
     }
 
-    //== 4b. A boosted shelf must not dip ====================================
-    // Regression guard. Second-order shelving branches rotate phase far enough
-    // that the branch response goes negative past the corner, carving a ~6 dB
-    // hole an octave away from a boost. First-order branches do not.
+    //== 4b. A boosted shelf dips a little, and only a little ===============
+    // Real shelves do dip past the corner -- a measured board falls about 6 %
+    // of its boost below flat -- so this is not a defect to eliminate. What it
+    // guards is the failure that made the shelves first order in the first
+    // place: a fully second-order branch rotates phase far enough to carve a
+    // 6.5 dB hole an octave from a 12 dB boost, which is 54 % of the boost.
     {
         for (bool high : { false, true })
         {
@@ -285,8 +287,7 @@ int main()
 
             auto net = makeNetwork (s);
 
-            double worst = 0.0;
-            double worstHz = 0.0;
+            double worst = 0.0, worstHz = 0.0;
 
             for (int i = 0; i < 400; ++i)
             {
@@ -296,10 +297,43 @@ int main()
                 if (db < worst) { worst = db; worstHz = hz; }
             }
 
-            check (worst > -0.5,
-                   std::string (high ? "high" : "low") + " shelf boost must not dip below unity "
-                   "anywhere (worst " + std::to_string (worst) + " dB at "
-                   + std::to_string ((int) worstHz) + " Hz)");
+            check (std::abs (worst) < 0.12 * 12.0,
+                   std::string (high ? "high" : "low") + " shelf boost should dip only slightly "
+                   "past the corner (worst " + std::to_string (worst) + " dB at "
+                   + std::to_string ((int) worstHz) + " Hz, more than 12 % of the boost)");
+        }
+    }
+
+    //== 4c. Shelf slope matches the measured hardware ======================
+    // 7.0 dB/octave through the transition, repeatable across the 35, 60 and
+    // 110 Hz positions of the board that was measured. A first-order branch
+    // alone gives about 4.9.
+    {
+        for (double hz : { 35.0, 60.0, 110.0 })
+        {
+            EqSettings s;
+            s.lfFreqHz = (float) hz;
+            s.lfGainDb = 20.0f;
+            auto net = makeNetwork (s);
+
+            const auto plateau = net.magnitudeDbAt (5.0);
+
+            const auto find = [&] (double below)
+            {
+                for (int i = 0; i < 2000; ++i)
+                {
+                    const auto f = hz * std::pow (2.0, 6.0 * i / 1999.0);
+                    if (net.magnitudeDbAt (f) < plateau - below) return f;
+                }
+                return 0.0;
+            };
+
+            const auto a = find (3.0), b = find (15.0);
+            const auto slope = (a > 0.0 && b > a) ? 12.0 / std::log2 (b / a) : 0.0;
+
+            checkClose (slope, 6.8, 1.2,
+                        "low shelf slope at " + std::to_string ((int) hz)
+                            + " Hz should be near the measured 7 dB/octave");
         }
     }
 

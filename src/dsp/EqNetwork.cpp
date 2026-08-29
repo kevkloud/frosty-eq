@@ -90,9 +90,9 @@ float EqNetwork::processSample (float x) noexcept
     // b_i = d_i * u + v_i, so u falls out in closed form.
     float d[kNumBands], v[kNumBands];
 
-    lowBranch .analyse (OnePole::Output::lowpass,  d[low],  v[low]);
-    midBranch .analyse (Svf::Output::bandpass,     d[mid],  v[mid]);
-    highBranch.analyse (OnePole::Output::highpass, d[high], v[high]);
+    lowBranch .analyse (ShelfBranch::Type::low,  d[low],  v[low]);
+    midBranch .analyse (Svf::Output::bandpass,   d[mid],  v[mid]);
+    highBranch.analyse (ShelfBranch::Type::high, d[high], v[high]);
 
     float denom    = 1.0f;
     float stateSum = 0.0f;
@@ -124,9 +124,9 @@ float EqNetwork::processSample (float x) noexcept
 std::complex<double> EqNetwork::responseAt (double frequencyHz) const noexcept
 {
     const std::complex<double> branch[kNumBands] {
-        lowBranch .responseAt (OnePole::Output::lowpass,  frequencyHz, sampleRate),
-        midBranch .responseAt (Svf::Output::bandpass,     frequencyHz, sampleRate),
-        highBranch.responseAt (OnePole::Output::highpass, frequencyHz, sampleRate)
+        lowBranch .responseAt (ShelfBranch::Type::low,  frequencyHz, sampleRate),
+        midBranch .responseAt (Svf::Output::bandpass,   frequencyHz, sampleRate),
+        highBranch.responseAt (ShelfBranch::Type::high, frequencyHz, sampleRate)
     };
 
     std::complex<double> numerator { 1.0, 0.0 };

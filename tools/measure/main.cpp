@@ -387,6 +387,63 @@ namespace
         }
     }
 
+    /** Shelf shape, reported the same way the measured plots were read, so the
+        two are directly comparable. */
+    void printShelf()
+    {
+        std::printf ("Shelf shape at +20 dB, matching the level the reference plots were taken at. Measured figures traced from response plots of\n"
+                     "an assembled board (Nyan-1073-EQ, CC BY-SA 4.0): slope near 7 dB/oct,\n"
+                     "and a dip past the corner of roughly 6 %% of the boost.\n\n"
+                     "%14s %8s %9s %11s %9s %10s\n",
+                     "shelf", "boost", "corner", "slope dB/oct", "dip dB", "dip/boost");
+
+        struct Case { const char* name; bool high; float hz; };
+        const Case cases[] {
+            { "low 35",   false, 35.0f  }, { "low 60",  false, 60.0f  },
+            { "low 110",  false, 110.0f }, { "low 220", false, 220.0f },
+            { "high 12k", true,  12000.0f },
+        };
+
+        for (const auto& c : cases)
+        {
+            EqSettings s;
+            if (c.high) { s.hfFreqHz = c.hz; s.hfGainDb = 20.0f; }
+            else        { s.lfFreqHz = c.hz; s.lfGainDb = 20.0f; }
+
+            auto net = make (s);
+
+            // Sample the whole band once.
+            constexpr int kPoints = 2000;
+            std::vector<double> f (kPoints), db (kPoints);
+            for (int i = 0; i < kPoints; ++i)
+            {
+                f[(size_t) i]  = 20.0 * std::pow (1000.0, (double) i / (kPoints - 1));
+                db[(size_t) i] = net.magnitudeDbAt (f[(size_t) i]);
+            }
+
+            const auto boost = c.high ? db.back() : db.front();
+
+            // Corner and slope, walking away from the shelf plateau.
+            const auto step = c.high ? -1 : 1;
+            const auto start = c.high ? kPoints - 1 : 0;
+
+            double corner = 0.0, at15 = 0.0, dip = 0.0, dipAt = 0.0;
+
+            for (int i = start; i >= 0 && i < kPoints; i += step)
+            {
+                if (corner == 0.0 && db[(size_t) i] < boost - 3.0)  corner = f[(size_t) i];
+                if (at15   == 0.0 && db[(size_t) i] < boost - 15.0) at15   = f[(size_t) i];
+                if (db[(size_t) i] < dip) { dip = db[(size_t) i]; dipAt = f[(size_t) i]; }
+            }
+
+            const auto slope = (corner > 0.0 && at15 > 0.0)
+                                 ? 12.0 / std::abs (std::log2 (at15 / corner)) : 0.0;
+
+            std::printf ("%14s %+8.1f %9.0f %11.1f %9.2f %9.1f%%  (at %.0f Hz)\n",
+                         c.name, boost, corner, slope, dip, 100.0 * std::abs (dip) / boost, dipAt);
+        }
+    }
+
     void printQ()
     {
         std::printf ("Proportional Q: realised mid-bell width at 1.6 kHz, measured 3 dB\n"
@@ -430,6 +487,7 @@ int main (int argc, char** argv)
     if (command == "alias")   { printAliasing();    return 0; }
     if (command == "bell")    { printBell();        return 0; }
     if (command == "fitq")    { printFitQ();        return 0; }
+    if (command == "shelf")   { printShelf();       return 0; }
 
     if (command == "thd" || command == "profile")
     {

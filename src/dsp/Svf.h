@@ -194,4 +194,81 @@ private:
     static constexpr double kPi = 3.14159265358979323846;
 };
 
+//==============================================================================
+/** Shelving branch: a first-order pole with a second-order one blended
+    alongside it.
+
+    A purely first-order shelf is too shallow. Response plots of an assembled
+    board show the low shelf falling at almost exactly 7 dB/octave through its
+    transition, repeatably across the 35, 60 and 110 Hz positions; a first-order
+    branch gives about 4.9 measured the same way. A purely second-order branch
+    is far too aggressive -- it carved a 6.5 dB hole an octave from a 12 dB
+    boost, which is why these were first order to begin with. Half of each lands
+    the slope near 6.7 and, as a side effect, brings the -3 dB corners within
+    about 6 % of their marked frequencies, where first order alone ran 13 to
+    37 % high.
+
+    Both parts are affine in the input, so the blend is too, and the network's
+    zero-delay solve is unaffected.
+
+    Known difference. A boosted shelf on the measured board dips roughly 6 % of
+    its boost below flat past the corner -- about 1.2 dB on a 20 dB boost,
+    around ten times the corner frequency -- and this reaches 2.5 %. The dip
+    needs the branch's real part to go negative, and for this blend that part
+    behaves as (1 - 2m)/x^2 well above the corner, so it can only just reach
+    zero at m = 0.5 and cannot go usefully negative without the slope running
+    away with it. Producing it properly needs a zero in the branch, which the
+    original's LC network has and this does not yet. At the boosts anyone
+    actually uses the difference is a fraction of a dB.
+*/
+class ShelfBranch
+{
+public:
+    enum class Type { low, high };
+
+    /** Half and half, solved against the measured slope; `measure shelf`
+        reports what this produces. */
+    static constexpr float  kSecondOrderMix = 0.50f;
+    static constexpr double kSecondOrderQ   = 0.70;
+
+    void setCutoff (double frequencyHz, double sampleRate) noexcept
+    {
+        first .setCutoff (frequencyHz, sampleRate);
+        second.setCutoff (frequencyHz, kSecondOrderQ, sampleRate);
+    }
+
+    void reset() noexcept { first.reset(); second.reset(); }
+
+    void analyse (Type type, float& d, float& v) const noexcept
+    {
+        float d1 = 0.0f, v1 = 0.0f, d2 = 0.0f, v2 = 0.0f;
+
+        first .analyse (type == Type::low ? OnePole::Output::lowpass : OnePole::Output::highpass, d1, v1);
+        second.analyse (type == Type::low ? Svf::Output::lowpass     : Svf::Output::highpass,     d2, v2);
+
+        d = (1.0f - kSecondOrderMix) * d1 + kSecondOrderMix * d2;
+        v = (1.0f - kSecondOrderMix) * v1 + kSecondOrderMix * v2;
+    }
+
+    void update (float input) noexcept
+    {
+        first .update (input);
+        second.update (input);
+    }
+
+    std::complex<double> responseAt (Type type, double frequencyHz, double sampleRate) const noexcept
+    {
+        const auto a = first .responseAt (type == Type::low ? OnePole::Output::lowpass : OnePole::Output::highpass,
+                                          frequencyHz, sampleRate);
+        const auto b = second.responseAt (type == Type::low ? Svf::Output::lowpass : Svf::Output::highpass,
+                                          frequencyHz, sampleRate);
+
+        return (1.0 - (double) kSecondOrderMix) * a + (double) kSecondOrderMix * b;
+    }
+
+private:
+    OnePole first;
+    Svf     second;
+};
+
 } // namespace frostyeq
