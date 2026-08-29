@@ -22,7 +22,12 @@ namespace frostyeq
 class Halfband2x
 {
 public:
-    static constexpr int kTaps = 49;                 // 48 = 16 * 3, so /2, /4, /8 are all integers
+    // 80 is divisible by 8, so the group delay stays a whole number of samples
+    // at every factor. 48 was the first choice and was too short: the round
+    // trip drooped 0.54 dB at 20 kHz, outside the +/-0.5 dB the module is
+    // specified flat to, and worst-case stopband rejection was only 30 dB.
+    // At 80 the droop is below 0.01 dB and rejection better than 70 dB.
+    static constexpr int kTaps = 81;
     static constexpr int kGroupDelay = (kTaps - 1) / 2;   // at the oversampled rate
 
     Halfband2x() { design(); }

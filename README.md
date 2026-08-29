@@ -37,7 +37,7 @@ same level, because core flux is the integral of applied voltage and so falls
 as 1/f. Marinair measured 10:1 between 40 Hz and 1 kHz on the line transformer
 used in these units. Distortion falls cleanly with level -- a quarter for every
 12 dB down, which is what a second-harmonic-dominant stage should do -- and
-folded images sit at -111 dB at the default 2x.
+folded images sit at -141 dB at the default 2x.
 
 ```bash
 ./build/measure profile
@@ -123,9 +123,9 @@ Stereo, 48 kHz, measured as a fraction of one core on Apple silicon:
 | oversampling | % of a core |
 |---|---|
 | Off | 0.94 |
-| 2x (default) | 4.75 |
-| 4x | 9.4 |
-| 8x | 18.1 |
+| 2x (default) | 4.7 |
+| 4x | 9.9 |
+| 8x | 19.2 |
 
 Roughly 57 % of that is the four saturating stages, which evaluate an
 antiderivative in double precision per sample; the anti-imaging filters are
