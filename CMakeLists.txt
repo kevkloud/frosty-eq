@@ -56,7 +56,10 @@ target_sources(FrostyEQ PRIVATE
     src/PluginEditor.cpp
     src/params/ParameterLayout.cpp
     src/dsp/EqNetwork.cpp
-    src/dsp/DspCore.cpp)
+    src/dsp/DspCore.cpp
+    src/gui/LookAndFeel.cpp
+    src/gui/Controls.cpp
+    src/gui/EqCurveDisplay.cpp)
 
 target_include_directories(FrostyEQ PRIVATE src)
 
@@ -117,6 +120,18 @@ add_test(NAME dsp COMMAND FrostyDspTests)
 #==============================================================================
 # Offline measurement harness. Drives the DSP core with no host involved.
 #==============================================================================
+add_executable(snapshot tools/snapshot/main.cpp)
+target_include_directories(snapshot PRIVATE src)
+target_link_libraries(snapshot PRIVATE
+    FrostyEQ
+    juce::juce_audio_utils
+    juce::juce_audio_processors
+    juce::juce_gui_basics
+    juce::juce_dsp
+    juce::juce_events
+    juce::juce_recommended_config_flags
+    juce::juce_recommended_warning_flags)
+
 add_executable(measure tools/measure/main.cpp src/dsp/EqNetwork.cpp)
 target_include_directories(measure PRIVATE src)
 target_link_libraries(measure PRIVATE

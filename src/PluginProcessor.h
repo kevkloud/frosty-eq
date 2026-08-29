@@ -56,12 +56,11 @@ public:
     float getInputPeak  (int ch) const noexcept { return read (inputPeak,  ch); }
     float getOutputPeak (int ch) const noexcept { return read (outputPeak, ch); }
 
-    /** For the Phase 3 curve display: the same network the audio path uses, so
-        the drawn curve cannot drift from what is heard. */
-    const frostyeq::EqNetwork& getDisplayNetwork() const noexcept
-    {
-        return dsp.displayNetwork();
-    }
+    // Deliberately no accessor for the audio path's EqNetwork. The editor runs
+    // on the message thread and the audio thread mutates those coefficients
+    // continuously, so reading them to draw a curve would be a data race. The
+    // curve display owns its own EqNetwork instead and drives it from the
+    // parameter values -- same code, same maths, no sharing.
 
 private:
     void parameterChanged (const juce::String& parameterID, float newValue) override;

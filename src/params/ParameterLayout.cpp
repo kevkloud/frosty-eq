@@ -7,7 +7,14 @@ namespace
 {
     juce::AudioParameterFloatAttributes dbAttr()
     {
-        return juce::AudioParameterFloatAttributes().withLabel ("dB");
+        return juce::AudioParameterFloatAttributes()
+            .withLabel ("dB")
+            .withStringFromValueFunction ([] (float v, int)
+            {
+                // Signed, one decimal, with the unit -- what the readout under
+                // each knob shows.
+                return (v > 0.0f ? "+" : "") + juce::String (v, 1) + " dB";
+            });
     }
 
     std::unique_ptr<juce::AudioParameterFloat> makeFloat (const char* id,
@@ -114,7 +121,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout create()
     layout.add (makeBool (kPhase, "Phase",  false));
 
     layout.add (makeFloat (kMix, "Mix", 0.0f, 100.0f, 0.1f, 100.0f,
-                           juce::AudioParameterFloatAttributes().withLabel ("%")));
+                           juce::AudioParameterFloatAttributes()
+                               .withLabel ("%")
+                               .withStringFromValueFunction ([] (float v, int)
+                               {
+                                   return juce::String (juce::roundToInt (v)) + " %";
+                               })));
 
     layout.add (makeBool (kAutoGain, "Auto Gain", false));
 

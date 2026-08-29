@@ -9,13 +9,33 @@ names and trademarks belong to their owners and are not used in this product.
 
 ## Status
 
-Phase 2 complete. Builds as VST3, AU, and Standalone; passes `auval`,
+Phase 3 complete. Builds as VST3, AU, and Standalone; passes `auval`,
 `pluginval --strictness-level 10`, and its own test suite.
 
 The equaliser works. All three bands, the high-pass and the 1084 low-pass are
 implemented as a shared feedback network rather than a chain of biquads, so the
 bands interact and the mid bell shows proportional Q the way the hardware does.
-Saturation and the transformer model are Phase 4; the custom GUI is Phase 3.
+There is a real panel now, with a live response curve and input/output metering.
+
+Saturation and the transformer model are Phase 4.
+
+## Interface
+
+The control layout follows the hardware, so anyone who has used a 1073 knows
+where things are: filters grouped together, the three bands running low to
+high, each a gain control with its stepped frequency selector directly beneath
+-- the flat equivalent of the hardware's concentric pairs. Hi-Q sits with the
+mid band because that is where it belongs on a 1084.
+
+The finish follows Ableton's stock devices rather than the original's panel.
+That livery is trade dress; copying it would raise the same problem as using
+the name.
+
+Render the editor to a PNG without launching a host:
+
+```bash
+./build/snapshot ui.png 760 486 model=1 mid_gain=11 mid_freq=4 hpf_freq=2
+```
 
 See `docs/plan.md` for the full roadmap.
 

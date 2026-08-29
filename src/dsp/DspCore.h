@@ -86,10 +86,6 @@ public:
 
     void process (float* const* channels, int numChannels, int numSamples) noexcept;
 
-    /** The network whose coefficients the curve display should draw. All
-        channels share coefficients, so channel 0 is representative. */
-    const EqNetwork& displayNetwork() const noexcept { return networks[0]; }
-
     static constexpr int kSubBlock = 32;
 
 private:
