@@ -99,10 +99,10 @@ void FrostyEqAudioProcessorEditor::timerCallback()
     const auto* model = processorRef.getApvts().getRawParameterValue (P::kModel);
     const auto is1084 = model != nullptr && model->load (std::memory_order_relaxed) > 0.5f;
 
-    if (is1084 == lastModelWas1084)
+    if (appliedModel == (int) is1084)
         return;
 
-    lastModelWas1084 = is1084;
+    appliedModel = (int) is1084;
 
     hfFreq.setKnobEnabled   (is1084);   // the 1073's shelf is fixed at 12 kHz
     lpf   .setKnobEnabled   (is1084);   // the low-pass is a 1084 addition

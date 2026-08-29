@@ -53,7 +53,11 @@ private:
 
     juce::Rectangle<int> filterSection, eqSection, levelSection;
 
-    bool lastModelWas1084 = false;
+    // Tri-state on purpose. A plain bool initialised to false matches the
+    // default model, so the first call would decide nothing had changed and
+    // skip the update -- leaving the 1084-only controls looking live on a
+    // fresh 1073, which is the state the plugin opens in.
+    int appliedModel = -1;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (FrostyEqAudioProcessorEditor)
 };
