@@ -363,9 +363,39 @@ int main()
         auto net = makeNetwork (s);
 
         const auto perOctave = net.magnitudeDbAt (75.0) - net.magnitudeDbAt (37.5);
-        checkClose (perOctave, 18.0, 2.0, "high-pass should fall about 18 dB per octave");
+        checkClose (perOctave, 18.0, 0.5, "high-pass should fall 18 dB per octave");
 
         check (net.magnitudeDbAt (20000.0) > -0.1, "high-pass must not affect the top end");
+
+        // No resonance. A third-order Butterworth is maximally flat, and that
+        // is what the hardware measures -- response plots of an assembled board
+        // show no peak whatever. A guessed Q of 1.30 here had invented a
+        // 0.87 dB one.
+        for (int position = 1; position <= 4; ++position)
+        {
+            EqSettings h;
+            h.hpfFreqHz = hpfFreq (Model::m1073, position);
+            auto filter = makeNetwork (h);
+
+            double peak = -100.0, peakHz = 0.0;
+
+            for (int i = 0; i < 1200; ++i)
+            {
+                const auto hz = 20.0 * std::pow (1000.0, (double) i / 1199.0);
+                const auto db = filter.magnitudeDbAt (hz);
+
+                if (db > peak) { peak = db; peakHz = hz; }
+            }
+
+            check (peak < 0.1,
+                   "the high-pass must not resonate (" + std::to_string ((int) h.hpfFreqHz)
+                       + " Hz peaks " + std::to_string (peak) + " dB at "
+                       + std::to_string ((int) peakHz) + " Hz)");
+
+            // Butterworth puts -3 dB exactly on the marked frequency.
+            checkClose (filter.magnitudeDbAt (h.hpfFreqHz), -3.0, 0.35,
+                        "the high-pass should be 3 dB down at its marked frequency");
+        }
     }
 
     //== 7. Stability under extremes ==========================================

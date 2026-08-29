@@ -90,8 +90,16 @@ inline constexpr std::array<float, 6> kMidBranchQ { 1.39f, 1.59f, 1.49f, 1.31f, 
 inline constexpr float kMidHiQFactor = 2.0f;
 inline constexpr float kLowShelfQ  = 0.85f;  // >0.707 gives the inductor shelf's slight dip
 inline constexpr float kHighShelfQ = 0.75f;
-inline constexpr float kHpfQ       = 1.30f;  // passive LC filter's resonant bump
-inline constexpr float kLpfQ       = 0.80f;
+// The high-pass is third order: one real pole plus a complex pair. A pair at
+// Q = 1.0 alongside a coincident real pole is third-order Butterworth, which is
+// maximally flat. That is what the hardware measures -- response plots of an
+// assembled board show no peak whatever, worst case +0.0 dB. An earlier guess
+// of 1.30 here invented a 0.87 dB resonance that is not there.
+inline constexpr float kHpfQ       = 1.00f;
+
+// No measurement to hand for the 1084's low-pass, so second-order Butterworth:
+// maximally flat, the defensible default when there is nothing to fit to.
+inline constexpr float kLpfQ       = 0.707f;
 
 //==============================================================================
 inline constexpr float highShelfFreq (Model m, int position) noexcept

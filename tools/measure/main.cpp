@@ -444,6 +444,43 @@ namespace
         }
     }
 
+    /** High-pass shape, reported as the measured plots were read. */
+    void printHpf()
+    {
+        std::printf ("High-pass. Measured from an assembled board: no peak at all (worst\n"
+                     "+0.0 dB), and -3 dB corners about 10 %% below the marked frequency\n"
+                     "-- 45, 71, 139 and 270 Hz for the 50, 80, 160 and 300 settings.\n\n"
+                     "%9s %9s %8s %10s %10s\n", "marked", "-3 dB", "err %", "peak dB", "dB/oct");
+
+        for (int position = 1; position <= 4; ++position)
+        {
+            const auto marked = hpfFreq (Model::m1073, position);
+
+            EqSettings s;
+            s.hpfFreqHz = marked;
+            auto net = make (s);
+
+            double peak = -100.0, corner = 0.0, at6 = 0.0, at24 = 0.0;
+
+            for (int i = 3000; i >= 0; --i)
+            {
+                const auto f = 20.0 * std::pow (1000.0, (double) i / 3000.0);
+                const auto db = net.magnitudeDbAt (f);
+
+                if (db > peak) peak = db;
+                if (corner == 0.0 && db < -3.0)  corner = f;
+                if (at6    == 0.0 && db < -6.0)  at6 = f;
+                if (at24   == 0.0 && db < -24.0) at24 = f;
+            }
+
+            const auto slope = (at6 > 0.0 && at24 > 0.0 && at6 > at24)
+                                 ? 18.0 / std::log2 (at6 / at24) : 0.0;
+
+            std::printf ("%9.0f %9.0f %8.1f %10.2f %10.1f\n",
+                         marked, corner, 100.0 * (corner - marked) / marked, peak, slope);
+        }
+    }
+
     void printQ()
     {
         std::printf ("Proportional Q: realised mid-bell width at 1.6 kHz, measured 3 dB\n"
@@ -488,6 +525,7 @@ int main (int argc, char** argv)
     if (command == "bell")    { printBell();        return 0; }
     if (command == "fitq")    { printFitQ();        return 0; }
     if (command == "shelf")   { printShelf();       return 0; }
+    if (command == "hpf")     { printHpf();         return 0; }
 
     if (command == "thd" || command == "profile")
     {
