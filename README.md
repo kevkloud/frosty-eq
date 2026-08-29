@@ -78,6 +78,14 @@ That board is one reference, not ground truth: its shelves measure +18 to
 the published specification the specification wins, and each such point is
 noted in `ModelTables.h`.
 
+The tracing is in the repository too, so the targets can be checked rather than
+taken on trust:
+
+```bash
+uv venv && uv pip install pillow numpy
+.venv/bin/python tools/python/trace_measurements.py mid nyan1073_mid.png
+```
+
 ```bash
 ./build/measure bell     # realised centre and width, per mid detent
 ./build/measure fitq     # solve branch Q from a measured width
