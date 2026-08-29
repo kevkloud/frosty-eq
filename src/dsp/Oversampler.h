@@ -133,6 +133,24 @@ private:
 };
 
 //==============================================================================
+/** Round-trip delay of a cascade, in samples at the base rate. Whole by
+    construction: each stage contributes kGroupDelay at its own rate, twice.
+
+    Free rather than a member so it can size a constexpr member below -- a
+    member function is not usable in a constant expression until its class is
+    complete. */
+constexpr int oversamplerLatency (int factor) noexcept
+{
+    const auto stages = factor >= 8 ? 3 : factor >= 4 ? 2 : factor >= 2 ? 1 : 0;
+    int latency = 0;
+
+    for (int s = 0; s < stages; ++s)
+        latency += (2 * Halfband2x::kGroupDelay) / (1 << (s + 1));
+
+    return latency;
+}
+
+//==============================================================================
 /** Cascade of half-band stages giving 1x, 2x, 4x or 8x. */
 class Oversampler
 {
@@ -149,22 +167,16 @@ public:
 
     int getFactor() const noexcept { return factor; }
 
-    /** Round trip delay, in samples at the base rate. Whole by construction:
-        each stage contributes kGroupDelay at its own rate, twice. */
     int getLatencySamples() const noexcept { return latencyForFactor (factor); }
 
-    static int latencyForFactor (int f) noexcept
-    {
-        const auto n = f >= 8 ? 3 : f >= 4 ? 2 : f >= 2 ? 1 : 0;
-        int latency = 0;
+    static constexpr int latencyForFactor (int f) noexcept { return oversamplerLatency (f); }
 
-        for (int s = 0; s < n; ++s)
-            latency += (2 * Halfband2x::kGroupDelay) / (1 << (s + 1));
-
-        return latency;
-    }
-
-    static constexpr int kMaxLatency = Halfband2x::kGroupDelay;   // 24 + 12 + 6
+    /** Worst case across every supported factor. Derived rather than written
+        out: stating it by hand got it wrong once -- it read kGroupDelay, which
+        is the delay of a single stage, not of the three-stage cascade 8x uses.
+        DspCore sizes the dry delay buffer from this, so being short here
+        overran it and corrupted the heap. */
+    static constexpr int kMaxLatency = oversamplerLatency (kMaxFactor);
 
     void reset() noexcept
     {

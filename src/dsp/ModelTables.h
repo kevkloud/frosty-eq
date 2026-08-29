@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cmath>
 
 namespace frostyeq
 {
@@ -57,8 +58,28 @@ inline constexpr std::array<float, 5> kLpfFreqs1084 { 6000.0f, 8000.0f, 10000.0f
 // scipy analysis in tools/python is in place.
 //==============================================================================
 
-inline constexpr float kMidQ       = 0.60f;  // broad 1073/1084 mid bell
-inline constexpr float kMidQHi     = 1.60f;  // 1084 "Hi-Q" switch
+//------------------------------------------------------------------------------
+// Mid band Q, per switch position, derived from the circuit rather than guessed.
+//
+// A series LC branch has Q = w0 * L / R, so Q tracks the product of centre
+// frequency and inductance. The mid band does not switch these uniformly: the
+// lower three positions switch both inductance and capacitance, using taps of
+// 10 H, 7 H and 3 H, which holds Q roughly level; the upper three share a
+// single 200 mH winding and switch capacitance alone, so there Q climbs in
+// proportion to frequency. That asymmetry is why 360 Hz is broad and musical
+// while 7.2 kHz is a focused presence peak -- behaviour a single Q constant
+// cannot produce, and this model previously did not have.
+//
+// R is not published, so each group is anchored by one measurement: the lower
+// group so that 1.6 kHz lands at Q = 1.20, which is where measurements of real
+// units put it, and the upper group just below that at the inductor change.
+//------------------------------------------------------------------------------
+
+inline constexpr std::array<float, 6> kMidBranchQ { 0.90f, 1.22f, 1.20f, 1.15f, 1.72f, 2.59f };
+
+/** The 1084's Hi-Q switch narrows the mid band; it scales whatever the
+    position's Q already is rather than replacing it. */
+inline constexpr float kMidHiQFactor = 2.0f;
 inline constexpr float kLowShelfQ  = 0.85f;  // >0.707 gives the inductor shelf's slight dip
 inline constexpr float kHighShelfQ = 0.75f;
 inline constexpr float kHpfQ       = 1.30f;  // passive LC filter's resonant bump
@@ -84,6 +105,40 @@ inline constexpr float lowShelfFreq (int position) noexcept
 {
     const auto i = (position < 0 ? 0 : (position > 3 ? 3 : position));
     return kLowShelfFreqs[(size_t) i];
+}
+
+/** Mid Q as a function of centre frequency, interpolated in log frequency
+    between the switch positions.
+
+    Taking frequency rather than an index means a selector gliding between two
+    detents carries its Q along with it, and the curve display and the audio
+    path derive it the same way from the same value. */
+inline float midBranchQ (float hz, bool hiQ) noexcept
+{
+    const auto f = hz <= 0.0f ? kMidFreqs[0] : hz;
+
+    float q = kMidBranchQ[0];
+
+    if (f >= kMidFreqs[5])
+    {
+        q = kMidBranchQ[5];
+    }
+    else if (f > kMidFreqs[0])
+    {
+        for (size_t i = 0; i + 1 < kMidFreqs.size(); ++i)
+        {
+            if (f <= kMidFreqs[i + 1])
+            {
+                const auto t = (std::log2 (f) - std::log2 (kMidFreqs[i]))
+                             / (std::log2 (kMidFreqs[i + 1]) - std::log2 (kMidFreqs[i]));
+
+                q = kMidBranchQ[i] + t * (kMidBranchQ[i + 1] - kMidBranchQ[i]);
+                break;
+            }
+        }
+    }
+
+    return hiQ ? q * kMidHiQFactor : q;
 }
 
 /** Low-pass, 1084 only. Position 0 is Off, hence the -1. Returns 0 for Off. */

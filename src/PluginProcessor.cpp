@@ -53,24 +53,45 @@ void FrostyEqAudioProcessor::parameterChanged (const juce::String& parameterID, 
 {
     // Fired from whichever thread moved the parameter, so this stays
     // allocation- and lock-free: an atomic store plus an async trigger.
-    if (parameterID == P::kModel && hpfFreqChoice != nullptr)
-        hpfFreqChoice->setModel ((Model) (int) newValue);
+    if (parameterID == P::kModel)
+    {
+        const auto model = (int) newValue;
+
+        if (hpfFreqChoice != nullptr)
+            hpfFreqChoice->setModel ((Model) model);
+
+        pendingModel.store (model, std::memory_order_relaxed);
+    }
 
     triggerAsyncUpdate();
 }
 
 void FrostyEqAudioProcessor::handleAsyncUpdate()
 {
+    // Both of the calls below are expensive for the host, and automation can
+    // move these parameters on every block. Only tell it about a change that
+    // actually happened.
+
     // Changing the oversampling factor changes the latency of the anti-imaging
     // filters, which the host needs so its delay compensation stays right.
-    // Computed from the parameter rather than read back from the DSP, which
-    // may not have picked up the change yet.
-    const auto factor = oversamplingFactor ((int) oversamplingParam->load (std::memory_order_relaxed));
-    setLatencySamples (frostyeq::Oversampler::latencyForFactor (factor));
+    // Read from the parameter rather than the DSP, which may not have picked
+    // the change up yet.
+    const auto factor  = oversamplingFactor ((int) oversamplingParam->load (std::memory_order_relaxed));
+    const auto latency = frostyeq::Oversampler::latencyForFactor (factor);
 
-    // Switching models also changes what the high-pass detents are called, so
-    // the host must re-read the parameter text. Message thread only.
-    updateHostDisplay();
+    if (reportedLatency.exchange (latency, std::memory_order_relaxed) != latency)
+        setLatencySamples (latency);
+
+    // Switching models changes what the high-pass detents are called, so the
+    // host must re-read the parameter text. Message thread only, and only when
+    // the model really moved.
+    const auto model = pendingModel.exchange (-1, std::memory_order_relaxed);
+
+    if (model >= 0 && model != lastReportedModel)
+    {
+        lastReportedModel = model;
+        updateHostDisplay();
+    }
 }
 
 //==============================================================================

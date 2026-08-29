@@ -268,6 +268,61 @@ namespace
         }
     }
 
+    /** Realised centre and width for each mid detent -- what the band actually
+        does, as opposed to what its branch Q was set to. */
+    void printBell()
+    {
+        std::printf ("Mid band, as realised. Centre is where the response actually peaks\n"
+                     "(band interaction can pull it off the nominal frequency); width is\n"
+                     "measured 3 dB below that peak.\n\n"
+                     "%9s %10s %8s %9s %9s %9s\n",
+                     "nominal", "centre", "err %", "+6 oct", "+12 oct", "+18 oct");
+
+        for (int position = 0; position < 6; ++position)
+        {
+            const auto nominal = kMidFreqs[(size_t) position];
+            std::printf ("%9.0f", nominal);
+
+            // (centre reported from the +6 dB pass)
+
+            for (double gain : { 6.0, 12.0, 18.0 })
+            {
+                EqSettings s;
+                s.midFreqHz = nominal;
+                s.midGainDb = (float) gain;
+                auto net = make (s);
+
+                // Locate the actual peak.
+                double best = -1.0e9, bestHz = nominal;
+                for (int i = 0; i < 3000; ++i)
+                {
+                    const auto hz = nominal * std::pow (2.0, -2.0 + 4.0 * i / 2999.0);
+                    const auto db = net.magnitudeDbAt (hz);
+                    if (db > best) { best = db; bestHz = hz; }
+                }
+
+                const auto threshold = best - 3.0;
+                const auto edge = [&] (double dir)
+                {
+                    double hz = bestHz;
+                    for (int i = 0; i < 8000; ++i)
+                    {
+                        hz *= std::pow (2.0, dir * 0.001);
+                        if (hz < 10.0 || hz > 23000.0 || net.magnitudeDbAt (hz) < threshold) break;
+                    }
+                    return hz;
+                };
+
+                if (gain == 6.0)
+                    std::printf ("%10.0f %7.1f%%", bestHz, 100.0 * (bestHz - nominal) / nominal);
+
+                std::printf ("%9.2f", std::log2 (edge (1.0) / edge (-1.0)));
+            }
+
+            std::printf ("\n");
+        }
+    }
+
     void printQ()
     {
         std::printf ("Proportional Q: realised mid-bell width at 1.6 kHz, measured 3 dB\n"
@@ -309,6 +364,7 @@ int main (int argc, char** argv)
     if (command == "bands")   { printInteraction(); return 0; }
     if (command == "q")       { printQ();           return 0; }
     if (command == "alias")   { printAliasing();    return 0; }
+    if (command == "bell")    { printBell();        return 0; }
 
     if (command == "thd" || command == "profile")
     {

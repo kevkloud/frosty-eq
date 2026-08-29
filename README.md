@@ -43,6 +43,19 @@ folded images sit at -111 dB at the default 2x.
 ./build/measure profile
 ```
 
+The mid band's Q is derived per switch position from the circuit rather than
+being one constant. A series LC branch has Q = w0 * L / R, and the mid band
+does not switch its components uniformly: the lower three positions switch
+inductance as well as capacitance (taps of 10 H, 7 H and 3 H), holding Q
+roughly level, while the upper three share one 200 mH winding and switch
+capacitance alone, so Q climbs with frequency. 360 Hz comes out broad at 2.6
+octaves; 7.2 kHz is a focused presence peak at 1.0. Each detent peaks within a
+couple of percent of its marked frequency.
+
+```bash
+./build/measure bell
+```
+
 ## Interface
 
 The control layout follows the hardware, so anyone who has used a 1073 knows

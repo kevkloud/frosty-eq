@@ -597,7 +597,11 @@ int main()
     //== 14. The dry path is delayed to match the oversampling filters =======
     // Otherwise a partial Mix combs and a full bypass fails to null.
     {
-        for (int factor : { 1, 2, 4 })
+        // 8x included deliberately: the dry-delay buffer was sized from a
+        // constant that held one stage's delay rather than the cascade's, so
+        // the highest factor overran it and corrupted the heap. Nothing below
+        // 8x touched the bug.
+        for (int factor : { 1, 2, 4, 8 })
         {
             DspCore core;
             core.prepare (kSampleRate, 512, 1, factor);
@@ -633,16 +637,20 @@ int main()
     }
 
     //== 15. Nothing blows up when driven into the weeds =====================
+    // Stereo at the highest factor, which is where the dry-delay overrun was.
     {
+        static_assert (Oversampler::kMaxLatency >= oversamplerLatency (Oversampler::kMaxFactor),
+                       "the dry delay is sized from kMaxLatency; it must cover every factor");
+
         DspCore core;
-        core.prepare (kSampleRate, 512, 2, 4);
+        core.prepare (kSampleRate, 512, 2, 8);
 
         DspCore::Params p;
         p.inputGainDb = 24.0f;
         p.midGainDb   = 18.0f;
         p.lfGainDb    = 16.0f;
         p.hfGainDb    = 16.0f;
-        p.oversampling = 4;
+        p.oversampling = 8;
         core.setParams (p);
 
         std::vector<float> l (512), r (512);
@@ -661,6 +669,82 @@ int main()
         }
 
         check (sane, "the chain must stay finite and bounded when driven hard");
+    }
+
+
+    //== 16. The mid band is tuned where the panel says it is ================
+    // Band interaction pulls the realised peak away from the branch frequency.
+    // With the Q of every detent derived from the circuit this stays small, but
+    // it was 15.8 % flat at 7.2 kHz when the whole band shared one Q value --
+    // you selected 7.2 kHz and got 6.1 kHz, which is more than a quarter tone.
+    {
+        for (int position = 0; position < 6; ++position)
+        {
+            const auto nominal = (double) kMidFreqs[(size_t) position];
+
+            EqSettings s;
+            s.midFreqHz = (float) nominal;
+            s.midGainDb = 9.0f;
+            auto net = makeNetwork (s);
+
+            double best = -1.0e9, peak = nominal;
+
+            for (int i = 0; i < 3000; ++i)
+            {
+                const auto hz = nominal * std::pow (2.0, -1.5 + 3.0 * i / 2999.0);
+                const auto db = net.magnitudeDbAt (hz);
+
+                if (db > best) { best = db; peak = hz; }
+            }
+
+            const auto errorPercent = 100.0 * (peak - nominal) / nominal;
+
+            check (std::abs (errorPercent) < 4.0,
+                   "the mid bell should peak within a few percent of its marked frequency ("
+                       + std::to_string ((int) nominal) + " Hz reads "
+                       + std::to_string ((int) peak) + " Hz, "
+                       + std::to_string (errorPercent) + " %)");
+        }
+    }
+
+    //== 17. Q rises across the mid selector ================================
+    // The lower three detents switch inductance as well as capacitance, which
+    // holds Q roughly level; the upper three share one winding and switch
+    // capacitance alone, so Q climbs with frequency. 360 Hz is broad, 7.2 kHz
+    // is a presence peak. A single Q constant cannot do this.
+    {
+        std::vector<double> widths;
+
+        for (int position = 0; position < 6; ++position)
+        {
+            EqSettings s;
+            s.midFreqHz = kMidFreqs[(size_t) position];
+            s.midGainDb = 9.0f;
+            auto net = makeNetwork (s);
+
+            widths.push_back (bellWidthOctaves (net, kMidFreqs[(size_t) position], 3.0));
+        }
+
+        check (widths.front() > widths.back() * 1.8,
+               "360 Hz should be markedly broader than 7.2 kHz ("
+                   + std::to_string (widths.front()) + " against "
+                   + std::to_string (widths.back()) + " octaves)");
+
+        check (widths[5] < widths[3] && widths[4] < widths[3],
+               "the upper detents should tighten as frequency rises");
+
+        // Hi-Q narrows whatever the position already was.
+        EqSettings s;
+        s.model     = Model::m1084;
+        s.midFreqHz = 1600.0f;
+        s.midGainDb = 9.0f;
+        auto wide = makeNetwork (s);
+
+        s.midHiQ = true;
+        auto narrow = makeNetwork (s);
+
+        check (bellWidthOctaves (narrow, 1600.0, 3.0) < bellWidthOctaves (wide, 1600.0, 3.0) * 0.8,
+               "Hi-Q should clearly narrow the mid band");
     }
 
     if (failures == 0)

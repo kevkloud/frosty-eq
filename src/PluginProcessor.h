@@ -109,6 +109,14 @@ private:
 
     frostyeq::DspCore dsp;
 
+    // Latency and parameter-name changes are only pushed to the host when they
+    // actually change. Automating the model or oversampling otherwise floods
+    // the host with setLatencySamples and updateHostDisplay calls on every
+    // move, which is enough to destabilise it.
+    std::atomic<int> reportedLatency { -1 };
+    std::atomic<int> pendingModel { -1 };
+    int lastReportedModel = -1;
+
     std::array<std::atomic<float>, 2> inputPeak  { };
     std::array<std::atomic<float>, 2> outputPeak { };
 
