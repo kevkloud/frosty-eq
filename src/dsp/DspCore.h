@@ -1,6 +1,8 @@
 #pragma once
 
 #include "EqNetwork.h"
+#include "Saturation.h"
+#include "Oversampler.h"
 #include <array>
 #include <vector>
 
@@ -76,10 +78,21 @@ public:
         bool eqIn        = true;
         bool phaseInvert = false;
         bool autoGain    = false;
+
+        int oversampling = 1;   // 1, 2, 4 or 8
     };
 
-    void prepare (double sampleRate, int maxBlockSize, int numChannels);
+    void prepare (double sampleRate, int maxBlockSize, int numChannels, int oversampleFactor = 2);
     void reset() noexcept;
+
+    /** Round-trip delay of the oversampling filters, in samples at the host's
+        rate. Reported to the host so plugin delay compensation can undo it. */
+    int getLatencySamples() const noexcept { return latencySamples; }
+
+    /** The rate the equaliser actually runs at, which is the host rate times
+        the oversampling factor. The curve display needs it so the drawn curve
+        matches what the audio path does. */
+    double getEqSampleRate() const noexcept { return effectiveRate; }
 
     /** Called once per block, before process(). Cheap: stores targets only. */
     void setParams (const Params&) noexcept;
@@ -90,10 +103,27 @@ public:
 
 private:
     void updateCoefficients (int activeChannels) noexcept;
+    void applyOversampling (int factor);
 
     double sampleRate = 44100.0;
+    double effectiveRate = 44100.0;
+    int    latencySamples = 0;
 
     std::array<EqNetwork, 2> networks;
+
+    // The signal chain of the original: input transformer, class-A preamp, the
+    // equaliser, class-A output amp, output transformer. The nonlinear stages
+    // sit inside the oversampled region because that is where they alias; the
+    // equaliser is linear but rides along, which also spares the 1084's 16 kHz
+    // shelf the bilinear warping it would suffer at 48 kHz.
+    std::array<TransformerStage, 2> inputTransformer, outputTransformer;
+    std::array<ClassAStage, 2>      preamp, outputAmp;
+    std::array<Oversampler, 2>      oversamplers;
+
+    // The dry path of the Mix control has to be delayed to match, or a partial
+    // blend combs and a full bypass fails to null.
+    std::vector<float> dryDelay;
+    int dryWrite = 0, dryLength = 1, dryStride = 0;
 
     Smoother hfFreqSm, midFreqSm, lfFreqSm;     // smoothed in log2(Hz)
     Smoother hfGainSm, midGainSm, lfGainSm;
@@ -103,8 +133,8 @@ private:
     EqSettings currentSettings;
     bool     settingsValid = false;
 
-    std::vector<float> dryScratch;   // preallocated; interleaved by channel
     int maxBlock = 0, maxChannels = 0;
+    int currentFactor = 0;
 };
 
 } // namespace frostyeq

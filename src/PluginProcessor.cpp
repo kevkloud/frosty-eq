@@ -29,6 +29,7 @@ FrostyEqAudioProcessor::FrostyEqAudioProcessor()
     phaseParam       = bind (P::kPhase);
     eqInParam        = bind (P::kEqIn);
     autoGainParam    = bind (P::kAutoGain);
+    oversamplingParam = bind (P::kOversampling);
 
     jassert (modelParam != nullptr && midGainParam != nullptr && mixParam != nullptr);
 
@@ -36,24 +37,23 @@ FrostyEqAudioProcessor::FrostyEqAudioProcessor()
     jassert (hpfFreqChoice != nullptr);
 
     apvts.addParameterListener (P::kModel, this);
+    apvts.addParameterListener (P::kOversampling, this);
     parameterChanged (P::kModel, modelParam->load());
 }
 
 FrostyEqAudioProcessor::~FrostyEqAudioProcessor()
 {
     apvts.removeParameterListener (P::kModel, this);
+    apvts.removeParameterListener (P::kOversampling, this);
     cancelPendingUpdate();
 }
 
 //==============================================================================
 void FrostyEqAudioProcessor::parameterChanged (const juce::String& parameterID, float newValue)
 {
-    if (parameterID != P::kModel)
-        return;
-
     // Fired from whichever thread moved the parameter, so this stays
-    // allocation- and lock-free: one atomic store plus an async trigger.
-    if (hpfFreqChoice != nullptr)
+    // allocation- and lock-free: an atomic store plus an async trigger.
+    if (parameterID == P::kModel && hpfFreqChoice != nullptr)
         hpfFreqChoice->setModel ((Model) (int) newValue);
 
     triggerAsyncUpdate();
@@ -61,22 +61,30 @@ void FrostyEqAudioProcessor::parameterChanged (const juce::String& parameterID, 
 
 void FrostyEqAudioProcessor::handleAsyncUpdate()
 {
-    // Switching models changes what the high-pass detents are called, so the
-    // host must re-read the parameter text. Message thread only.
+    // Changing the oversampling factor changes the latency of the anti-imaging
+    // filters, which the host needs so its delay compensation stays right.
+    // Computed from the parameter rather than read back from the DSP, which
+    // may not have picked up the change yet.
+    const auto factor = oversamplingFactor ((int) oversamplingParam->load (std::memory_order_relaxed));
+    setLatencySamples (frostyeq::Oversampler::latencyForFactor (factor));
+
+    // Switching models also changes what the high-pass detents are called, so
+    // the host must re-read the parameter text. Message thread only.
     updateHostDisplay();
 }
 
 //==============================================================================
 void FrostyEqAudioProcessor::prepareToPlay (double sampleRate, int maximumExpectedSamplesPerBlock)
 {
-    dsp.prepare (sampleRate, maximumExpectedSamplesPerBlock, getTotalNumOutputChannels());
+    const auto factor = oversamplingFactor ((int) oversamplingParam->load (std::memory_order_relaxed));
+
+    dsp.prepare (sampleRate, maximumExpectedSamplesPerBlock, getTotalNumOutputChannels(), factor);
 
     for (auto* a : { &inputPeak, &outputPeak })
         for (auto& p : *a)
             p.store (0.0f, std::memory_order_relaxed);
 
-    // Phase 4 reports oversampling latency here.
-    setLatencySamples (0);
+    setLatencySamples (dsp.getLatencySamples());
 }
 
 void FrostyEqAudioProcessor::releaseResources()
@@ -133,6 +141,7 @@ void FrostyEqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
     p.eqIn          = load (eqInParam) > 0.5f;
     p.phaseInvert   = load (phaseParam) > 0.5f;
     p.autoGain      = load (autoGainParam) > 0.5f;
+    p.oversampling  = oversamplingFactor ((int) load (oversamplingParam));
 
     dsp.setParams (p);
     dsp.process (buffer.getArrayOfWritePointers(), numOut, numSamples);

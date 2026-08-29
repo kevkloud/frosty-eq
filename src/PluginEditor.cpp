@@ -94,6 +94,8 @@ void FrostyEqAudioProcessorEditor::timerCallback()
 {
     // Controls the 1073 does not have stay present but greyed, so automation
     // survives a model switch.
+    curve.setEqSampleRate (processorRef.getEqSampleRate());
+
     const auto* model = processorRef.getApvts().getRawParameterValue (P::kModel);
     const auto is1084 = model != nullptr && model->load (std::memory_order_relaxed) > 0.5f;
 

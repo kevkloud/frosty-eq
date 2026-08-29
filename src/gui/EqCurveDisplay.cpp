@@ -29,14 +29,24 @@ namespace
 EqCurveDisplay::EqCurveDisplay (juce::AudioProcessorValueTreeState& s)
     : state (s)
 {
-    // Sample rate here only sets the prewarping of the drawn curve; 48 kHz is
-    // representative and keeps the display stable when the host rate changes.
-    network.prepare (48000.0);
+    network.prepare (sampleRate);
     refreshSettings();
     startTimerHz (30);
 }
 
 //==============================================================================
+void EqCurveDisplay::setEqSampleRate (double rate)
+{
+    if (rate <= 0.0 || juce::approximatelyEqual (rate, sampleRate))
+        return;
+
+    sampleRate = rate;
+    network.prepare (sampleRate);
+    network.setSettings (settings);
+    rebuildCurve();
+    repaint();
+}
+
 bool EqCurveDisplay::refreshSettings()
 {
     const auto model = (Model) (int) rawValue (state, P::kModel);

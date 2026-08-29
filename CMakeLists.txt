@@ -132,7 +132,7 @@ target_link_libraries(snapshot PRIVATE
     juce::juce_recommended_config_flags
     juce::juce_recommended_warning_flags)
 
-add_executable(measure tools/measure/main.cpp src/dsp/EqNetwork.cpp)
+add_executable(measure tools/measure/main.cpp src/dsp/EqNetwork.cpp src/dsp/DspCore.cpp)
 target_include_directories(measure PRIVATE src)
 target_link_libraries(measure PRIVATE
     juce::juce_recommended_config_flags

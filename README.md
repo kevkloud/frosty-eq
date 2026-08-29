@@ -9,15 +9,39 @@ names and trademarks belong to their owners and are not used in this product.
 
 ## Status
 
-Phase 3 complete. Builds as VST3, AU, and Standalone; passes `auval`,
+Phase 4 complete. Builds as VST3, AU, and Standalone; passes `auval`,
 `pluginval --strictness-level 10`, and its own test suite.
 
 The equaliser works. All three bands, the high-pass and the 1084 low-pass are
 implemented as a shared feedback network rather than a chain of biquads, so the
 bands interact and the mid bell shows proportional Q the way the hardware does.
-There is a real panel now, with a live response curve and input/output metering.
+There is a real panel, with a live response curve and input/output metering.
 
-Saturation and the transformer model are Phase 4.
+The colour stage is in: two transformers and two single-ended class-A gain
+stages around the equaliser, anti-aliased and oversampled. Drive it with the
+Input control and pull the Output down, exactly as you would wind up the mic
+gain and drop the fader on the hardware.
+
+## Measured
+
+At full scale with the Input at unity, 2x oversampling:
+
+| | THD | character |
+|---|---|---|
+| 40 Hz | 4.3 % | third harmonic leads by 8.7 dB -- the core saturates symmetrically |
+| 1 kHz | 0.64 % | second harmonic leads by 12.1 dB -- the class-A stages |
+| 10 kHz | 0.52 % | second harmonic |
+
+Low frequencies distort roughly seven times harder than the midrange at the
+same level, because core flux is the integral of applied voltage and so falls
+as 1/f. Marinair measured 10:1 between 40 Hz and 1 kHz on the line transformer
+used in these units. Distortion falls cleanly with level -- a quarter for every
+12 dB down, which is what a second-harmonic-dominant stage should do -- and
+folded images sit at -111 dB at the default 2x.
+
+```bash
+./build/measure profile
+```
 
 ## Interface
 

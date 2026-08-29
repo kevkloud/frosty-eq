@@ -46,6 +46,9 @@ public:
     //== Ours ==================================================================
     juce::AudioProcessorValueTreeState& getApvts() noexcept  { return apvts; }
 
+    /** Rate the equaliser runs at, for the curve display. */
+    double getEqSampleRate() const noexcept { return dsp.getEqSampleRate(); }
+
     frostyeq::Model getCurrentModel() const noexcept
     {
         return (frostyeq::Model) (int) modelParam->load (std::memory_order_relaxed);
@@ -64,6 +67,13 @@ public:
 
 private:
     void parameterChanged (const juce::String& parameterID, float newValue) override;
+
+    /** Oversampling choice index to factor: Off, 2x, 4x, HQ. */
+    static int oversamplingFactor (int index) noexcept
+    {
+        constexpr int factors[] { 1, 2, 4, 8 };
+        return factors[juce::jlimit (0, 3, index)];
+    }
     void handleAsyncUpdate() override;
 
     static float read (const std::array<std::atomic<float>, 2>& a, int ch) noexcept
@@ -92,6 +102,7 @@ private:
     std::atomic<float>* phaseParam        = nullptr;
     std::atomic<float>* eqInParam         = nullptr;
     std::atomic<float>* autoGainParam     = nullptr;
+    std::atomic<float>* oversamplingParam = nullptr;
 
     // The high-pass selector's labels depend on the active model.
     frostyeq::params::PositionalChoice* hpfFreqChoice = nullptr;

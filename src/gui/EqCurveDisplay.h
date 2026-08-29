@@ -23,6 +23,11 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
 
+    /** The equaliser runs at the host rate times the oversampling factor, so
+        the drawn curve has to be evaluated there too or it would disagree with
+        the audio path near the top of the band. */
+    void setEqSampleRate (double);
+
 private:
     void timerCallback() override;
     bool refreshSettings();          // returns true if anything changed
@@ -33,6 +38,7 @@ private:
 
     juce::AudioProcessorValueTreeState& state;
 
+    double      sampleRate = 96000.0;
     EqNetwork   network;
     EqSettings  settings;
     bool        eqIn = true;

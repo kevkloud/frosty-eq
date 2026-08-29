@@ -4,16 +4,22 @@
 // runs in milliseconds and is trivial to debug. This is the ground truth the
 // EQ is developed against; see docs/plan.md, Part 7.
 //
+//   measure thd    [--freq f] [--level dBFS] [--in dB] [--os n]
+//   measure profile  -- distortion against frequency and level
+//   measure alias    -- folded-image rejection
 //   measure curve  [--model 1073|1084] [--lf i:dB] [--mid i:dB] [--hf i:dB]
 //                  [--hpf i] [--lpf i] [--hiq]
 //   measure bands  -- band-interaction table
 //   measure q      -- realised bell width vs gain
 
 #include "dsp/EqNetwork.h"
+#include "dsp/DspCore.h"
 
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <vector>
+#include <array>
 #include <vector>
 
 using namespace frostyeq;
@@ -80,6 +86,188 @@ namespace
         }
     }
 
+    //==========================================================================
+    // Distortion analysis.
+    //
+    // The fundamental is placed exactly on a DFT bin so a rectangular window
+    // leaks nothing, and the harmonics then land exactly on bins too. No
+    // windowing, no correction factors, no ambiguity about what is signal and
+    // what is skirt.
+    //==========================================================================
+
+    constexpr int kAnalysisSize = 1 << 15;
+
+    struct Harmonics
+    {
+        double fundamentalHz = 0.0;
+        std::array<double, 9> level {};   // linear magnitude, index 1..8
+        double thdPercent = 0.0;
+    };
+
+    std::vector<float> render (double binFrequency, double levelDb,
+                               float inputGainDb, int oversampling, int samples)
+    {
+        DspCore core;
+        core.prepare (kSampleRate, 512, 1, oversampling);
+
+        DspCore::Params p;
+        p.inputGainDb  = inputGainDb;
+        p.oversampling = oversampling;
+        core.setParams (p);
+
+        const auto amplitude = std::pow (10.0, levelDb / 20.0);
+
+        std::vector<float> buffer ((size_t) samples);
+        float* channels[1] { buffer.data() };
+
+        // Two passes: the first lets the filters and the dry delay settle, the
+        // second is what gets analysed.
+        for (int pass = 0; pass < 2; ++pass)
+        {
+            for (int i = 0; i < samples; ++i)
+                buffer[(size_t) i] = (float) (amplitude
+                    * std::sin (2.0 * kPi * binFrequency * (double) i / kSampleRate));
+
+            core.process (channels, 1, samples);
+        }
+
+        return buffer;
+    }
+
+    /** Nearest frequency that is an exact whole number of cycles in the window. */
+    double snapToBin (double hz)
+    {
+        const auto bin = std::max (1.0, std::round (hz * (double) kAnalysisSize / kSampleRate));
+        return bin * kSampleRate / (double) kAnalysisSize;
+    }
+
+    double magnitudeAt (const std::vector<float>& x, double hz)
+    {
+        const auto w = -2.0 * kPi * hz / kSampleRate;
+        const std::complex<double> step { std::cos (w), std::sin (w) };
+        std::complex<double> rot { 1.0, 0.0 }, acc { 0.0, 0.0 };
+
+        for (float v : x) { acc += (double) v * rot; rot *= step; }
+
+        return 2.0 * std::abs (acc) / (double) x.size();
+    }
+
+    Harmonics analyse (double requestedHz, double levelDb, float inputGainDb, int oversampling)
+    {
+        Harmonics h;
+        h.fundamentalHz = snapToBin (requestedHz);
+
+        const auto x = render (h.fundamentalHz, levelDb, inputGainDb, oversampling, kAnalysisSize);
+
+        double harmonicPower = 0.0;
+
+        for (int n = 1; n <= 8; ++n)
+        {
+            const auto f = h.fundamentalHz * n;
+
+            if (f >= kSampleRate * 0.5)
+                break;
+
+            h.level[(size_t) n] = magnitudeAt (x, f);
+
+            if (n > 1)
+                harmonicPower += h.level[(size_t) n] * h.level[(size_t) n];
+        }
+
+        h.thdPercent = h.level[1] > 0.0 ? 100.0 * std::sqrt (harmonicPower) / h.level[1] : 0.0;
+        return h;
+    }
+
+    void printThd (double hz, double levelDb, float inputGainDb, int oversampling)
+    {
+        const auto h = analyse (hz, levelDb, inputGainDb, oversampling);
+
+        std::printf ("%.1f Hz at %.1f dBFS, input %+.1f dB, %dx oversampling\n\n",
+                     h.fundamentalHz, levelDb, inputGainDb, oversampling);
+        std::printf ("  THD  %.4f %%\n\n%10s %12s\n", h.thdPercent, "harmonic", "dB rel H1");
+
+        for (int n = 2; n <= 8; ++n)
+            if (h.level[(size_t) n] > 0.0)
+                std::printf ("%10d %12.1f\n", n,
+                             20.0 * std::log10 (h.level[(size_t) n] / h.level[1]));
+    }
+
+    void printProfile (int oversampling)
+    {
+        std::printf ("Distortion against frequency and level, input gain at unity.\n"
+                     "A transformer's core flux is the integral of applied voltage, so at\n"
+                     "a fixed level the bottom of the band works it far harder than the\n"
+                     "top. Marinair measured 0.1 %% at 40 Hz against 0.01 %% at 1 kHz and\n"
+                     "10 kHz for the line transformer in these units.\n\n");
+
+        const double levels[] { -24.0, -12.0, -6.0, 0.0 };
+        const double freqs[]  { 40.0, 100.0, 400.0, 1000.0, 5000.0, 10000.0 };
+
+        std::printf ("%8s", "Hz");
+        for (double l : levels) std::printf ("%12.0f dBFS", l);
+        std::printf ("\n");
+
+        for (double f : freqs)
+        {
+            std::printf ("%8.0f", f);
+
+            for (double l : levels)
+                std::printf ("%14.4f%%", analyse (f, l, 0.0f, oversampling).thdPercent);
+
+            std::printf ("\n");
+        }
+
+        std::printf ("\nSecond against third harmonic, 0 dBFS:\n%8s %10s %10s %10s\n",
+                     "Hz", "H2 dB", "H3 dB", "H2-H3");
+
+        for (double f : freqs)
+        {
+            const auto h = analyse (f, 0.0, 0.0f, oversampling);
+
+            if (h.level[2] <= 0.0 || h.level[3] <= 0.0)
+                continue;
+
+            const auto h2 = 20.0 * std::log10 (h.level[2] / h.level[1]);
+            const auto h3 = 20.0 * std::log10 (h.level[3] / h.level[1]);
+            std::printf ("%8.0f %10.1f %10.1f %10.1f\n", f, h2, h3, h2 - h3);
+        }
+    }
+
+    void printAliasing()
+    {
+        std::printf ("Folded-image rejection. A tone near the top of the band is driven\n"
+                     "hard; its harmonics land above Nyquist and fold back as inharmonic\n"
+                     "content. Reported is the worst non-harmonic peak below the\n"
+                     "fundamental.\n\n%6s %14s %14s\n", "factor", "worst alias", "THD");
+
+        for (int os : { 1, 2, 4, 8 })
+        {
+            const auto f0 = snapToBin (7500.0);
+            const auto x  = render (f0, -3.0, 18.0f, os, kAnalysisSize);
+
+            const auto fundamental = magnitudeAt (x, f0);
+            double worst = 0.0;
+
+            // Scan bins, skipping those at or adjacent to a harmonic of f0.
+            for (int bin = 4; bin < kAnalysisSize / 2; ++bin)
+            {
+                const auto f = bin * kSampleRate / (double) kAnalysisSize;
+                bool harmonic = false;
+
+                for (int n = 1; n <= 12; ++n)
+                    if (std::abs (f - n * f0) < 3.0 * kSampleRate / (double) kAnalysisSize)
+                        harmonic = true;
+
+                if (! harmonic)
+                    worst = std::max (worst, magnitudeAt (x, f));
+            }
+
+            std::printf ("%5dx %13.1f dB %13.4f%%\n", os,
+                         20.0 * std::log10 (worst / fundamental),
+                         analyse (7500.0, -3.0, 18.0f, os).thdPercent);
+        }
+    }
+
     void printQ()
     {
         std::printf ("Proportional Q: realised mid-bell width at 1.6 kHz, measured 3 dB\n"
@@ -118,8 +306,30 @@ int main (int argc, char** argv)
 {
     const std::string command = argc > 1 ? argv[1] : "curve";
 
-    if (command == "bands") { printInteraction(); return 0; }
-    if (command == "q")     { printQ();           return 0; }
+    if (command == "bands")   { printInteraction(); return 0; }
+    if (command == "q")       { printQ();           return 0; }
+    if (command == "alias")   { printAliasing();    return 0; }
+
+    if (command == "thd" || command == "profile")
+    {
+        double hz = 1000.0, level = -6.0;
+        float inputGain = 0.0f;
+        int os = 2;
+
+        for (int i = 2; i + 1 < argc; ++i)
+        {
+            const std::string a = argv[i];
+            if      (a == "--freq")  hz        = std::atof (argv[i + 1]);
+            else if (a == "--level") level     = std::atof (argv[i + 1]);
+            else if (a == "--in")    inputGain = (float) std::atof (argv[i + 1]);
+            else if (a == "--os")    os        = std::atoi (argv[i + 1]);
+        }
+
+        if (command == "profile") printProfile (os);
+        else                      printThd (hz, level, inputGain, os);
+
+        return 0;
+    }
 
     EqSettings s;
     int index = 0;

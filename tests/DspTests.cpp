@@ -67,6 +67,74 @@ namespace
         return 20.0 * std::log10 (std::max (magnitude, 1.0e-12));
     }
 
+
+    //==========================================================================
+    // Phase 4 helpers: drive the whole chain, saturation included.
+    //==========================================================================
+
+    constexpr int kChainSize = 1 << 15;
+
+    double snapToBin (double hz)
+    {
+        const auto bin = std::max (1.0, std::round (hz * (double) kChainSize / kSampleRate));
+        return bin * kSampleRate / (double) kChainSize;
+    }
+
+    std::vector<float> renderChain (double binHz, double levelDb, float inputGainDb,
+                                    int oversampling, DspCore::Params extra = {})
+    {
+        DspCore core;
+        core.prepare (kSampleRate, 512, 1, oversampling);
+
+        auto p = extra;
+        p.inputGainDb  = inputGainDb;
+        p.oversampling = oversampling;
+        core.setParams (p);
+
+        const auto amplitude = std::pow (10.0, levelDb / 20.0);
+        std::vector<float> buffer ((size_t) kChainSize);
+        float* channels[1] { buffer.data() };
+
+        for (int pass = 0; pass < 2; ++pass)
+        {
+            for (int i = 0; i < kChainSize; ++i)
+                buffer[(size_t) i] = (float) (amplitude
+                    * std::sin (2.0 * kPi * binHz * (double) i / kSampleRate));
+
+            core.process (channels, 1, kChainSize);
+        }
+
+        return buffer;
+    }
+
+    double magnitudeAt (const std::vector<float>& x, double hz)
+    {
+        const auto w = -2.0 * kPi * hz / kSampleRate;
+        const std::complex<double> step { std::cos (w), std::sin (w) };
+        std::complex<double> rot { 1.0, 0.0 }, acc { 0.0, 0.0 };
+
+        for (float v : x) { acc += (double) v * rot; rot *= step; }
+
+        return 2.0 * std::abs (acc) / (double) x.size();
+    }
+
+    double thdPercent (double hz, double levelDb, float inputGainDb, int oversampling)
+    {
+        const auto f0 = snapToBin (hz);
+        const auto x  = renderChain (f0, levelDb, inputGainDb, oversampling);
+
+        const auto fundamental = magnitudeAt (x, f0);
+        double power = 0.0;
+
+        for (int n = 2; n <= 8 && f0 * n < kSampleRate * 0.5; ++n)
+        {
+            const auto m = magnitudeAt (x, f0 * n);
+            power += m * m;
+        }
+
+        return fundamental > 0.0 ? 100.0 * std::sqrt (power) / fundamental : 0.0;
+    }
+
     /** Width in octaves at a fixed number of dB below the peak -- the classical
         bandwidth definition. Measuring at a *fraction* of the peak instead is
         misleading: that metric widens with gain even for a constant-Q bell. */
@@ -308,21 +376,46 @@ int main()
             }
         };
 
-        // Phase invert should produce the exact negative of the dry signal.
+        // Phase invert should negate the signal. Checked well below the knee,
+        // where the colour stage is linear -- higher up the saturation makes
+        // this a comparison of two slightly different waveforms rather than a
+        // test of polarity.
         {
             DspCore core;
-            core.prepare (kSampleRate, n, 2);
-            DspCore::Params p; p.eqIn = false; p.phaseInvert = true;
+            core.prepare (kSampleRate, n, 1);
+            DspCore::Params p;
+            p.eqIn = false;
+            p.phaseInvert = true;
+            p.oversampling = 1;          // keep it latency-free for a direct comparison
             core.setParams (p);
-            fill();
+
+            constexpr float amplitude = 1.0e-4f;
+
+            for (int i = 0; i < n; ++i)
+                left[(size_t) i] = right[(size_t) i] = amplitude
+                    * std::sin (2.0f * (float) kPi * 220.0f * (float) i / 48000.0f);
+
             std::vector<float> reference = left;
             core.process (channels, 2, n);
 
-            bool inverted = true;
-            for (int i = 0; i < n; ++i)
-                inverted = inverted && std::abs (left[(size_t) i] + reference[(size_t) i]) < 1.0e-5f;
+            // Correlation rather than a sample-by-sample match: the
+            // transformer's low-frequency rolloff shifts phase by a degree or
+            // so at 220 Hz, which is correct behaviour and would defeat a
+            // direct comparison without saying anything about polarity.
+            double dot = 0.0, energyA = 0.0, energyB = 0.0;
 
-            check (inverted, "phase invert with EQ out should negate the signal exactly");
+            for (int i = 512; i < n; ++i)
+            {
+                const double a = left[(size_t) i], b = reference[(size_t) i];
+                dot += a * b;
+                energyA += a * a;
+                energyB += b * b;
+            }
+
+            const auto correlation = dot / std::sqrt (energyA * energyB);
+
+            checkClose (correlation, -1.0, 0.01,
+                        "phase invert should negate the signal");
         }
 
         // Mix at 0% must be bit-identical to the input, whatever the EQ does.
@@ -395,6 +488,179 @@ int main()
 
             check (finite, "rapid model and selector changes must stay finite and bounded");
         }
+    }
+
+
+    //== 9. The colour stage leaves the response alone when it is not pushed ==
+    // The transformer emphasises into a flux-like domain, saturates there, and
+    // de-emphasises by the exact inverse. If that pair does not cancel, the
+    // plugin tilts the spectrum even at rest, which would be a far worse fault
+    // than any amount of distortion.
+    {
+        for (double hz : { 30.0, 60.0, 200.0, 1000.0, 5000.0, 12000.0 })
+        {
+            const auto f0 = snapToBin (hz);
+            const auto x  = renderChain (f0, -60.0, 0.0f, 2);
+
+            const auto db = 20.0 * std::log10 (magnitudeAt (x, f0) / std::pow (10.0, -60.0 / 20.0));
+
+            checkClose (db, 0.0, 0.6,
+                        "chain should be within a fraction of a dB of flat at low level at "
+                            + std::to_string ((int) hz) + " Hz");
+        }
+    }
+
+    //== 10. Distortion falls with level, and keeps falling =================
+    // Guards a real defect this code had: log(cosh(u)) computed the obvious
+    // way loses all precision for small u, and because ADAA divides the
+    // difference of two antiderivatives by a small dx, that error was
+    // amplified into a constant noise floor -- 66 % "THD" on a quiet signal.
+    {
+        double previous = 100.0;
+
+        for (double level : { 0.0, -12.0, -24.0, -36.0, -48.0, -60.0 })
+        {
+            const auto thd = thdPercent (1000.0, level, 0.0f, 2);
+
+            check (thd < previous,
+                   "THD must fall as level falls (at " + std::to_string ((int) level)
+                       + " dBFS got " + std::to_string (thd) + " %, previously "
+                       + std::to_string (previous) + " %)");
+
+            previous = thd;
+        }
+
+        check (previous < 0.01,
+               "a -60 dBFS signal should be essentially undistorted, got "
+                   + std::to_string (previous) + " %");
+    }
+
+    //== 11. Low frequencies distort far harder -- the transformer's signature =
+    // Core flux is the integral of applied voltage, so at a fixed level the
+    // bottom of the band drives the core far harder than the top. Marinair
+    // measured 0.1 % at 40 Hz against 0.01 % at 1 kHz for the line transformer
+    // in these units. A memoryless waveshaper distorts every frequency alike
+    // and cannot produce this at all.
+    {
+        const auto low  = thdPercent (40.0,   0.0, 0.0f, 2);
+        const auto mid  = thdPercent (1000.0, 0.0, 0.0f, 2);
+
+        check (low > mid * 3.0,
+               "40 Hz should distort several times harder than 1 kHz at the same level ("
+                   + std::to_string (low) + " % against " + std::to_string (mid) + " %)");
+
+        check (mid < 2.0, "1 kHz at full scale should stay civil, got " + std::to_string (mid) + " %");
+    }
+
+    //== 12. Second harmonic dominates through the midrange =================
+    // Single-ended class-A stages are asymmetric, and the second harmonic is
+    // an octave, so it stays consonant with whatever produced it.
+    {
+        const auto f0 = snapToBin (1000.0);
+        const auto x  = renderChain (f0, 0.0, 0.0f, 2);
+
+        const auto h2 = magnitudeAt (x, f0 * 2.0);
+        const auto h3 = magnitudeAt (x, f0 * 3.0);
+
+        check (h2 > h3 * 2.0,
+               "second harmonic should dominate the third in the midrange ("
+                   + std::to_string (20.0 * std::log10 (h2 / h3)) + " dB apart)");
+    }
+
+    //== 13. Aliasing stays buried ===========================================
+    {
+        const auto f0 = snapToBin (7500.0);
+        const auto x  = renderChain (f0, -3.0, 18.0f, 2);
+
+        const auto fundamental = magnitudeAt (x, f0);
+        double worst = 0.0;
+
+        for (int bin = 4; bin < kChainSize / 2; bin += 7)
+        {
+            const auto f = bin * kSampleRate / (double) kChainSize;
+            bool harmonic = false;
+
+            for (int n = 1; n <= 12; ++n)
+                if (std::abs (f - n * f0) < 4.0 * kSampleRate / (double) kChainSize)
+                    harmonic = true;
+
+            if (! harmonic)
+                worst = std::max (worst, magnitudeAt (x, f));
+        }
+
+        const auto rejection = 20.0 * std::log10 (worst / fundamental);
+        check (rejection < -80.0,
+               "folded images should sit below -80 dB even when driven hard, got "
+                   + std::to_string (rejection) + " dB");
+    }
+
+    //== 14. The dry path is delayed to match the oversampling filters =======
+    // Otherwise a partial Mix combs and a full bypass fails to null.
+    {
+        for (int factor : { 1, 2, 4 })
+        {
+            DspCore core;
+            core.prepare (kSampleRate, 512, 1, factor);
+
+            DspCore::Params p;
+            p.mixPercent   = 0.0f;      // dry only
+            p.oversampling = factor;
+            p.midGainDb    = 18.0f;     // the wet path is doing plenty; it must not leak
+            p.inputGainDb  = 12.0f;
+            core.setParams (p);
+
+            constexpr int n = 2048;
+            std::vector<float> buffer ((size_t) n, 0.0f);
+            buffer[64] = 1.0f;          // a lone impulse is easy to locate
+            float* channels[1] { buffer.data() };
+
+            core.process (channels, 1, n);
+
+            int peak = 0;
+            for (int i = 0; i < n; ++i)
+                if (std::abs (buffer[(size_t) i]) > std::abs (buffer[(size_t) peak]))
+                    peak = i;
+
+            check (peak - 64 == core.getLatencySamples(),
+                   "at 0 % mix the output should be the input delayed by exactly the "
+                   "reported latency (factor " + std::to_string (factor) + ": delay "
+                       + std::to_string (peak - 64) + ", reported "
+                       + std::to_string (core.getLatencySamples()) + ")");
+
+            checkClose (buffer[(size_t) peak], 1.0f, 1.0e-3,
+                        "the dry path must pass at unity");
+        }
+    }
+
+    //== 15. Nothing blows up when driven into the weeds =====================
+    {
+        DspCore core;
+        core.prepare (kSampleRate, 512, 2, 4);
+
+        DspCore::Params p;
+        p.inputGainDb = 24.0f;
+        p.midGainDb   = 18.0f;
+        p.lfGainDb    = 16.0f;
+        p.hfGainDb    = 16.0f;
+        p.oversampling = 4;
+        core.setParams (p);
+
+        std::vector<float> l (512), r (512);
+        float* ch[2] { l.data(), r.data() };
+        bool sane = true;
+
+        for (int block = 0; block < 100; ++block)
+        {
+            for (int i = 0; i < 512; ++i)
+                l[(size_t) i] = r[(size_t) i] = (float) std::sin (0.03 * (block * 512 + i));
+
+            core.process (ch, 2, 512);
+
+            for (int i = 0; i < 512; ++i)
+                sane = sane && std::isfinite (l[(size_t) i]) && std::abs (l[(size_t) i]) < 100.0f;
+        }
+
+        check (sane, "the chain must stay finite and bounded when driven hard");
     }
 
     if (failures == 0)

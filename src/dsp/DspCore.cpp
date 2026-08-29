@@ -9,7 +9,7 @@ namespace
 {
     float dbToGain (float db) noexcept { return std::pow (10.0f, db * 0.05f); }
 
-    float toLog2Hz (float hz) noexcept { return std::log2 (std::max (hz, 1.0f)); }
+    float toLog2Hz (float hz) noexcept  { return std::log2 (std::max (hz, 1.0f)); }
     float fromLog2Hz (float l) noexcept { return std::exp2 (l); }
 
     /** Bit-exact float comparison, deliberately. Smoother::tick snaps to its
@@ -20,6 +20,29 @@ namespace
     {
         return ! (a < b) && ! (b < a);
     }
+
+    //==========================================================================
+    // Calibration.
+    //
+    // The published figure for the unit is not more than 0.07 % from 50 Hz to
+    // 10 kHz at +20 dBu out, which is its nominal operating level -- these are
+    // clean amplifiers until they are pushed, and the colour is something you
+    // drive them into rather than something they do at rest. Taking 0 dBFS as
+    // roughly +22 dBu, unity here should be gently coloured and the Input
+    // control is what takes it further, exactly as winding up the mic gain and
+    // pulling the output fader does on the hardware.
+    //
+    // The amplifier bias is small on purpose. tanh with a large offset makes
+    // enormous second harmonic long before its knee, which sounds like a fuzz
+    // box rather than a console: an earlier calibration here was reading 10 %
+    // at 1 kHz.
+    //==========================================================================
+
+    constexpr float kInputIronDrive  = 0.50f;
+    constexpr float kOutputIronDrive = 0.70f;
+    constexpr float kPreampDrive     = 0.10f;
+    constexpr float kOutputAmpDrive  = 0.09f;
+    constexpr float kAmpAsymmetry    = 0.06f;
 
     bool sameSettings (const EqSettings& a, const EqSettings& b) noexcept
     {
@@ -33,38 +56,86 @@ namespace
 }
 
 //==============================================================================
-void DspCore::prepare (double newSampleRate, int maxBlockSize, int numChannels)
+void DspCore::prepare (double newSampleRate, int maxBlockSize, int numChannels,
+                       int oversampleFactor)
 {
     sampleRate  = newSampleRate > 0.0 ? newSampleRate : 44100.0;
     maxBlock    = std::max (maxBlockSize, 1);
     maxChannels = std::clamp (numChannels, 1, (int) networks.size());
 
-    for (auto& n : networks)
-        n.prepare (sampleRate);
+    // Sized for the highest factor, so a change of oversampling at run time
+    // never has to allocate on the audio thread.
+    dryDelay.assign ((size_t) ((Oversampler::kMaxLatency + 2) * (int) networks.size()), 0.0f);
+    dryStride = Oversampler::kMaxLatency + 2;
 
-    // Coefficients update once per sub-block, so the smoothers run at that rate.
     const auto controlRate = sampleRate / (double) kSubBlock;
 
     for (auto* s : { &hfFreqSm, &midFreqSm, &lfFreqSm })
-        s->prepare (controlRate, 25.0);            // frequency glides
+        s->prepare (controlRate, 25.0);
 
     for (auto* s : { &hfGainSm, &midGainSm, &lfGainSm,
                      &inputGainSm, &outputLevelSm, &mixSm, &autoGainSm })
         s->prepare (controlRate, 20.0);
 
-    // All allocation happens here. process() must never allocate.
-    dryScratch.assign ((size_t) (maxBlock * maxChannels), 0.0f);
+    applyOversampling (oversampleFactor);
 
     settingsValid = false;
     reset();
 }
 
+//==============================================================================
+void DspCore::applyOversampling (int factor)
+{
+    factor = factor >= 8 ? 8 : factor >= 4 ? 4 : factor >= 2 ? 2 : 1;
+
+    for (auto& o : oversamplers)
+        o.setFactor (factor);
+
+    currentFactor  = factor;
+    latencySamples = Oversampler::latencyForFactor (factor);
+    effectiveRate  = sampleRate * (double) factor;
+    dryLength      = latencySamples + 1;
+
+    // None of these allocate; they only recompute coefficients, so this is
+    // safe to call from the audio thread when the factor changes.
+    for (size_t ch = 0; ch < networks.size(); ++ch)
+    {
+        networks[ch].prepare (effectiveRate);
+
+        inputTransformer [ch].prepare (effectiveRate);
+        outputTransformer[ch].prepare (effectiveRate);
+        preamp           [ch].prepare (effectiveRate);
+        outputAmp        [ch].prepare (effectiveRate);
+
+        // Calibration. The transformers are driven so a full-scale tone at the
+        // bottom of the band sits near the knee; because the emphasis tilts
+        // 26 dB across 25 Hz to 500 Hz, a tone at 1 kHz then sits roughly a
+        // decade lower in distortion, which is what Marinair measured for the
+        // line transformer in these units. The class-A stages are gentler but
+        // markedly asymmetric, and supply most of the second harmonic.
+        inputTransformer [ch].setDrive (kInputIronDrive);
+        outputTransformer[ch].setDrive (kOutputIronDrive);   // the output iron works hardest
+
+        preamp   [ch].setDrive (kPreampDrive);
+        outputAmp[ch].setDrive (kOutputAmpDrive);
+        preamp   [ch].setAsymmetry (kAmpAsymmetry);
+        outputAmp[ch].setAsymmetry (kAmpAsymmetry);
+    }
+
+    settingsValid = false;
+}
+
 void DspCore::reset() noexcept
 {
-    for (auto& n : networks)
-        n.reset();
+    for (auto& n : networks)           n.reset();
+    for (auto& o : oversamplers)       o.reset();
+    for (auto& t : inputTransformer)   t.reset();
+    for (auto& t : outputTransformer)  t.reset();
+    for (auto& a : preamp)             a.reset();
+    for (auto& a : outputAmp)          a.reset();
 
-    std::fill (dryScratch.begin(), dryScratch.end(), 0.0f);
+    std::fill (dryDelay.begin(), dryDelay.end(), 0.0f);
+    dryWrite = 0;
 }
 
 //==============================================================================
@@ -90,8 +161,6 @@ void DspCore::setParams (const Params& p) noexcept
 
     if (! settingsValid)
     {
-        // First block after prepare: start settled rather than gliding up from
-        // silence-adjacent defaults.
         hfFreqSm .snap (toLog2Hz (hfHz));
         midFreqSm.snap (toLog2Hz (midHz));
         lfFreqSm .snap (toLog2Hz (lfHz));
@@ -120,8 +189,6 @@ void DspCore::updateCoefficients (int activeChannels) noexcept
     s.hpfFreqHz = hpfFreq (params.model, params.hpfIndex);
     s.lpfFreqHz = lpfFreq (params.model, params.lpfIndex);
 
-    // Once the smoothers settle the settings compare exactly equal, so a static
-    // EQ costs no trigonometry at all.
     if (settingsValid && sameSettings (s, currentSettings))
         return;
 
@@ -145,7 +212,11 @@ void DspCore::process (float* const* channels, int numChannels, int numSamples) 
     if (activeChannels == 0 || numSamples <= 0)
         return;
 
+    if (params.oversampling != currentFactor)
+        applyOversampling (params.oversampling);
+
     const auto polarity = params.phaseInvert ? -1.0f : 1.0f;
+    const auto factor   = currentFactor;
 
     for (int start = 0; start < numSamples; start += kSubBlock)
     {
@@ -158,29 +229,49 @@ void DspCore::process (float* const* channels, int numChannels, int numSamples) 
         const auto wet      = mixSm.tick();
         const auto dryLevel = 1.0f - wet;
 
-        for (int ch = 0; ch < activeChannels; ++ch)
+        // Samples outermost so the shared dry-delay cursor advances once per
+        // frame rather than once per channel.
+        for (int i = 0; i < n; ++i)
         {
-            auto* data = channels[ch] + start;
-            auto* dry  = dryScratch.data() + (size_t) ch * (size_t) maxBlock;
-            auto& net  = networks[(size_t) ch];
+            const auto readIndex = (dryWrite + 1) % dryLength;
 
-            std::memcpy (dry, data, (size_t) n * sizeof (float));
-
-            if (params.eqIn)
+            for (int ch = 0; ch < activeChannels; ++ch)
             {
-                for (int i = 0; i < n; ++i)
-                    data[i] = net.processSample (data[i] * inGain * polarity) * outGain;
-            }
-            else
-            {
-                // EQ In only bypasses the equaliser section; the gain stages
-                // stay in circuit, as on the hardware.
-                for (int i = 0; i < n; ++i)
-                    data[i] = data[i] * inGain * polarity * outGain;
+                auto* data = channels[ch] + start;
+                auto* dry  = dryDelay.data() + (size_t) ch * (size_t) dryStride;
+
+                const auto input = data[i];
+
+                dry[(size_t) dryWrite] = input;
+                const auto delayed = dry[(size_t) readIndex];
+
+                float buffer[Oversampler::kMaxFactor] {};
+                oversamplers[(size_t) ch].upsample (input * inGain * polarity, buffer);
+
+                for (int j = 0; j < factor; ++j)
+                {
+                    auto v = buffer[j];
+
+                    v = inputTransformer[(size_t) ch].process (v);
+                    v = preamp[(size_t) ch].process (v);
+
+                    // EQ In takes only the equaliser out of circuit; the gain
+                    // stages and their iron stay in, as on the hardware.
+                    if (params.eqIn)
+                        v = networks[(size_t) ch].processSample (v);
+
+                    v = outputAmp[(size_t) ch].process (v);
+                    v = outputTransformer[(size_t) ch].process (v);
+
+                    buffer[j] = v;
+                }
+
+                const auto processed = oversamplers[(size_t) ch].downsample (buffer) * outGain;
+
+                data[i] = processed * wet + delayed * dryLevel;
             }
 
-            for (int i = 0; i < n; ++i)
-                data[i] = data[i] * wet + dry[i] * dryLevel;
+            dryWrite = (dryWrite + 1) % dryLength;
         }
     }
 }
