@@ -6,14 +6,20 @@ namespace P = frostyeq::params;
 
 namespace
 {
-    constexpr int kWidth  = 360;
-    constexpr int kHeight = 792;
+    // A module is a tall narrow column, and this follows that proportion --
+    // roughly one to three and a half, as a 500-series slot is. The filters
+    // stack rather than sitting side by side, which is what was forcing the
+    // panel wide.
+    constexpr int kWidth  = 260;
+    constexpr int kHeight = 882;
 
-    constexpr int kHeader = 34;
-    constexpr int kPad    = 12;
-    constexpr int kGainRow = 88;
-    constexpr int kBandRow = 132;
-    constexpr int kSwitchRow = 26;
+    constexpr int kHeader    = 32;
+    constexpr int kPad       = 10;
+    constexpr int kGainRow   = 82;
+    constexpr int kBandRow   = 126;
+    constexpr int kFilterRow = 118;
+    constexpr int kHiQRow    = 24;
+    constexpr int kSwitchRow = 30;
 
     const juce::String phaseGlyph = juce::String (juce::CharPointer_UTF8 ("\xc3\x98"));
 }
@@ -129,7 +135,7 @@ void FrostyEqAudioProcessorEditor::resized()
     auto area = getLocalBounds();
 
     modelChooser.setBounds (area.removeFromTop (kHeader)
-                                .removeFromRight (110).reduced (kPad, 8));
+                                .removeFromRight (96).reduced (kPad, 7));
 
     area.reduce (kPad, kPad / 2);
 
@@ -138,39 +144,41 @@ void FrostyEqAudioProcessorEditor::resized()
 
     // Each band: frequency legended around the ring, cut and boost inside.
     high.setBounds (area.removeFromTop (kBandRow));
-    mid .setBounds (area.removeFromTop (kBandRow));
 
-    // Hi-Q belongs to the mid band, so it sits on that row rather than in a
-    // strip of unrelated switches.
-    midHiQ.setBounds (mid.getBounds().removeFromTop (22).removeFromRight (58).translated (-6, 2));
+    // Hi-Q belongs to the mid band. On the module it sits between the high and
+    // mid knobs, centred, so it goes there rather than floating off to one side.
+    midHiQ.setBounds (area.removeFromTop (kHiQRow).withSizeKeepingCentre (56, 20));
 
+    mid.setBounds (area.removeFromTop (kBandRow));
     low.setBounds (area.removeFromTop (kBandRow));
     dividers.push_back (area.getY());
 
-    {
-        auto filters = area.removeFromTop (kBandRow);
-        const auto half = filters.getWidth() / 2;
-        highPass.setBounds (filters.removeFromLeft (half));
-        lowPass .setBounds (filters);
-    }
-
+    highPass.setBounds (area.removeFromTop (kFilterRow));
+    lowPass .setBounds (area.removeFromTop (kFilterRow));
     dividers.push_back (area.getY());
 
     {
         auto switches = area.removeFromTop (kSwitchRow + 6).withTrimmedTop (6);
-        const auto w = 62;
-        eqIn .setBounds (switches.removeFromLeft (w));
-        switches.removeFromLeft (8);
-        phase.setBounds (switches.removeFromLeft (40));
+        constexpr int eqlWidth = 56, phaseWidth = 34, gap = 8;
+
+        auto group = switches.withSizeKeepingCentre (eqlWidth + gap + phaseWidth,
+                                                     switches.getHeight());
+        eqIn .setBounds (group.removeFromLeft (eqlWidth));
+        group.removeFromLeft (gap);
+        phase.setBounds (group);
     }
 
     {
+        // Knob and meter centred together, so the meter does not push the panel
+        // wide from the edge.
         auto bottom = area.removeFromTop (kGainRow + 6).withTrimmedTop (6);
 
-        // Clear of the resize corner, and no taller than the knob beside it.
-        auto meterArea = bottom.removeFromRight (52).withTrimmedRight (18);
-        meter.setBounds (meterArea.withSizeKeepingCentre (18, 66).translated (0, 4));
+        constexpr int knobWidth = 92, meterWidth = 48, gap = 4;
+        auto group = bottom.withSizeKeepingCentre (knobWidth + gap + meterWidth,
+                                                   bottom.getHeight());
 
-        outputLevel.setBounds (bottom);
+        outputLevel.setBounds (group.removeFromLeft (knobWidth));
+        group.removeFromLeft (gap);
+        meter.setBounds (group.withSizeKeepingCentre (meterWidth, 64).translated (0, 6));
     }
 }

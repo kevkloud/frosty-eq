@@ -134,9 +134,10 @@ tight -- anti-aliasing still runs, it just runs at the host rate.
 
 ## Interface
 
-A channel strip, not an analyser. One column: gain at the top, the three bands
-below it as concentric pairs with their frequencies legended around the ring,
-the filters under those, and the output at the bottom.
+A channel strip, not an analyser. One narrow column at roughly 1:3.4, the
+proportion of a 500-series slot: gain at the top, the three bands below it as
+concentric pairs with their frequencies legended around the ring, the filters
+stacked under those, and the output at the bottom.
 
 There is no response curve, no analyser, and **no numeric readout on any cut or
 boost**. A gain control is marked with a plus and a minus and nothing else,
@@ -158,7 +159,7 @@ number on a different scale: it is an RMS reading with slow ballistics, 0 VU at
 Render the panel without launching a host:
 
 ```bash
-./build/snapshot ui.png 360 792 model=1 mid_gain=9 mid_freq=5 mid_hiq=1
+./build/snapshot ui.png 260 882 model=1 mid_gain=9 mid_freq=5 mid_hiq=1
 ```
 
 ## Curve calibration

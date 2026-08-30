@@ -156,7 +156,7 @@ void ConcentricBand::paint (juce::Graphics& g)
     const auto area = getLocalBounds().withTrimmedTop (15).toFloat();
     const auto centrePoint = area.getCentre();
     const auto ringRadius = (float) juce::jmin (area.getWidth(), area.getHeight()) * 0.5f * ring.getFaceScale();
-    const auto textRadius = ringRadius + 17.0f;
+    const auto textRadius = ringRadius + 15.0f;
 
     const auto startAngle = ring.getRotaryParameters().startAngleRadians;
     const auto endAngle   = ring.getRotaryParameters().endAngleRadians;
@@ -176,7 +176,7 @@ void ConcentricBand::paint (juce::Graphics& g)
         g.setColour (! ringEnabled ? p.textDim.withAlpha (0.35f)
                                    : (isSelected ? p.text : p.textDim));
         g.setFont (theme::labelFont (isSelected ? 10.0f : 9.0f));
-        g.drawText (legend[i], juce::Rectangle<float> (34.0f, 12.0f).withCentre (at),
+        g.drawText (legend[i], juce::Rectangle<float> (30.0f, 12.0f).withCentre (at),
                     juce::Justification::centred, false);
     }
 }
@@ -243,8 +243,11 @@ void OutputMeter::paint (juce::Graphics& g)
     const auto& p = theme::palette();
 
     auto bounds = getLocalBounds();
+
+    // The label needs more room than the bar does, so the component is wider
+    // than the well and the well is centred inside it.
     const auto labelArea = bounds.removeFromBottom (12);
-    const auto well = bounds.toFloat();
+    const auto well = bounds.withSizeKeepingCentre (kBarWidth, bounds.getHeight()).toFloat();
 
     g.setColour (p.meterWell);
     g.fillRoundedRectangle (well, 2.0f);
@@ -275,7 +278,8 @@ void OutputMeter::paint (juce::Graphics& g)
 
     g.setColour (p.textDim);
     g.setFont (theme::labelFont (9.0f));
-    g.drawText (vuMode ? "VU" : "dBFS", labelArea, juce::Justification::centred, false);
+    g.drawText (vuMode ? "VU" : "dBFS", labelArea.toFloat(),
+                juce::Justification::centred, false);
 }
 
 } // namespace frostyeq::gui

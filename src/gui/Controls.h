@@ -118,6 +118,7 @@ private:
     bool  vuMode = false;
 
     static constexpr float kVuReference = -18.0f;   // dBFS at 0 VU
+    static constexpr int   kBarWidth    = 16;       // the label is wider than this
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (OutputMeter)
 };
