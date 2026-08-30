@@ -22,19 +22,10 @@ int main (int argc, char** argv)
     FrostyEqAudioProcessor processor;
     processor.prepareToPlay (48000.0, 512);
 
-    std::unique_ptr<juce::AudioProcessorEditor> editor (processor.createEditor());
-
-    if (editor == nullptr)
-    {
-        std::cerr << "no editor\n";
-        return 1;
-    }
-
-    if (argc > 3)
-        editor->setSize (std::atoi (argv[2]), std::atoi (argv[3]));
-
-    // Remaining arguments set parameters, so a particular state can be
-    // rendered and reviewed without driving the UI by hand.
+    // Parameters first, editor second. Attachments read the current value in
+    // their constructors, synchronously; setting parameters afterwards relies
+    // on the message queue, which is not running here, so the panel would
+    // render at its defaults no matter what was asked for.
     for (int i = 4; i < argc; ++i)
     {
         const juce::String arg { argv[i] };
@@ -52,15 +43,24 @@ int main (int argc, char** argv)
             std::cerr << "unknown parameter: " << id << '\n';
     }
 
-    // The value readouts and the response curve refresh on timers. Without a
-    // message loop running they would render stale, so pump them by hand.
-    // (runDispatchLoopUntil would need JUCE_MODAL_LOOPS_PERMITTED, which we do
-    // not enable.)
+    std::unique_ptr<juce::AudioProcessorEditor> editor (processor.createEditor());
+
+    if (editor == nullptr)
+    {
+        std::cerr << "no editor\n";
+        return 1;
+    }
+
+    if (argc > 3)
+        editor->setSize (std::atoi (argv[2]), std::atoi (argv[3]));
+
+    // Parts of the panel refresh on timers, so let those fire before capturing.
     for (int i = 0; i < 8; ++i)
     {
-        juce::Thread::sleep (60);
+        juce::Thread::sleep (40);
         juce::Timer::callPendingTimersSynchronously();
     }
+
 
     const auto image = editor->createComponentSnapshot (editor->getLocalBounds(), false, 2.0f);
 

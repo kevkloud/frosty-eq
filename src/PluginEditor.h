@@ -3,25 +3,26 @@
 #include "PluginProcessor.h"
 #include "gui/Controls.h"
 #include <memory>
+#include <vector>
 
 /** A channel strip, not an analyser.
 
-    Laid out the way the module is: one column, gain at the top, the bands
-    below it as concentric pairs with their frequencies legended around the
-    ring, the filters under those, and the output at the bottom. There is no
-    response curve, no analyser, and no numeric readout on any cut or boost --
-    a gain control is marked with a plus and a minus and nothing else.
+    Laid out the way the module is: one narrow column, gain at the top, the
+    bands below it as concentric pairs with their frequencies legended around
+    the ring, the filters under those, and the output at the bottom.
 
-    That is a deliberate choice and it came from an engineer who has used the
-    hardware for years: the numbers make people mix with their eyes, hunting a
-    tidy figure and flinching from a large move. Taking them away leaves the
-    ear to decide. The frequency legends stay, because those are switch
-    positions rather than amounts.
+    There is no response curve, no analyser, and no numeric readout on any cut
+    or boost -- a gain control is marked with a plus and a minus and nothing
+    else. That came from an engineer who has spent years on the hardware: the
+    numbers make people mix with their eyes, hunting a tidy figure and
+    flinching from a large move. Frequency legends stay, because a switch
+    position is not an amount.
 
-    The finish is Ableton's and the colour follows the module -- rose for one,
-    black for the other -- rather than either unit's actual livery. Copying
-    that would be trade dress, and it invites the thing to be judged as a
-    failed clone instead of used on its own terms.
+    The panel is drawn once at a fixed size and scaled as a whole. Laying it out
+    again at each new size, which is what it used to do, keeps the controls the
+    same size while the gaps between them stretch, so the design comes apart as
+    soon as it is not at its default size. A single uniform transform scales
+    knobs, legends, fonts and spacing together.
 */
 class FrostyEqAudioProcessorEditor final : public juce::AudioProcessorEditor,
                                            private juce::Timer
@@ -30,26 +31,46 @@ public:
     explicit FrostyEqAudioProcessorEditor (FrostyEqAudioProcessor&);
     ~FrostyEqAudioProcessorEditor() override;
 
-    void paint (juce::Graphics&) override;
     void resized() override;
 
+    /** The size everything is laid out at. Any other size is this, scaled. */
+    static constexpr int kDesignWidth  = 260;
+    static constexpr int kDesignHeight = 740;
+
 private:
+    //==========================================================================
+    /** Everything on the front of the plugin, at design size. */
+    class Panel final : public juce::Component
+    {
+    public:
+        explicit Panel (FrostyEqAudioProcessor&);
+
+        void paint (juce::Graphics&) override;
+        void resized() override;
+
+        void applyModel (bool is1084);
+
+    private:
+        juce::ComboBox modelChooser;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> modelAttachment;
+
+        frostyeq::gui::PlainKnob inputGain, outputLevel;
+        frostyeq::gui::ConcentricBand high, mid, low, highPass, lowPass;
+        frostyeq::gui::SwitchButton eqIn, phase, midHiQ;
+        frostyeq::gui::OutputMeter meter;
+
+        std::vector<int> dividers;
+
+        JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Panel)
+    };
+
     void timerCallback() override;
-    void applyModel (bool is1084);
 
     FrostyEqAudioProcessor& processorRef;
     frostyeq::gui::FrostyLookAndFeel lookAndFeel;
-
-    juce::ComboBox modelChooser;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> modelAttachment;
-
-    frostyeq::gui::PlainKnob inputGain, outputLevel;
-    frostyeq::gui::ConcentricBand high, mid, low, highPass, lowPass;
-    frostyeq::gui::SwitchButton eqIn, phase, midHiQ;
-    frostyeq::gui::OutputMeter meter;
+    Panel panel;
 
     int appliedModel = -1;
-    std::vector<int> dividers;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (FrostyEqAudioProcessorEditor)
 };

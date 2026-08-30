@@ -75,7 +75,14 @@ ConcentricBand::ConcentricBand (juce::AudioProcessorValueTreeState& s,
         ring.setDetents (choice->choices.size());
 
     ring.setSliderSnapsToMousePosition (false);
-    ring.setFaceScale (0.60f);
+    ring.setFaceScale (0.55f);
+
+    // The legend is drawn by this component, not by the slider, so a change of
+    // frequency has to repaint the parent. Without this the highlighted label
+    // stays on the previous position until something else happens to force a
+    // repaint.
+    ring.onValueChange = [this] { repaint(); };
+
     addAndMakeVisible (ring);
 
     ringAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
@@ -95,7 +102,7 @@ ConcentricBand::ConcentricBand (juce::AudioProcessorValueTreeState& s,
     else
     {
         // A plain ring: make its own face the visible knob.
-        ring.setFaceScale (0.44f);
+        ring.setFaceScale (0.50f);
     }
 
     startTimerHz (8);
@@ -156,12 +163,13 @@ void ConcentricBand::paint (juce::Graphics& g)
     const auto area = getLocalBounds().withTrimmedTop (15).toFloat();
     const auto centrePoint = area.getCentre();
     const auto ringRadius = (float) juce::jmin (area.getWidth(), area.getHeight()) * 0.5f * ring.getFaceScale();
-    const auto textRadius = ringRadius + 15.0f;
+    const auto textRadius = ringRadius + 13.0f;
 
     const auto startAngle = ring.getRotaryParameters().startAngleRadians;
     const auto endAngle   = ring.getRotaryParameters().endAngleRadians;
 
     const auto selected = juce::roundToInt (ring.getValue());
+
 
     for (int i = 0; i < legend.size(); ++i)
     {
