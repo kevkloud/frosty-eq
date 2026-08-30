@@ -7,65 +7,83 @@
 namespace frostyeq::gui
 {
 
-/** Caption above, knob, live value readout below -- the arrangement Live uses
-    on its own device controls. Reads its display text straight from the
-    parameter, so stepped selectors show "1.6 kHz" rather than an index, and
-    the high-pass relabels itself when the model changes. */
-class LabelledKnob final : public juce::Component,
-                           private juce::Timer
+/** Caption and a knob. No value readout of any kind. */
+class PlainKnob final : public juce::Component
 {
 public:
-    LabelledKnob (juce::AudioProcessorValueTreeState& state,
-                  const juce::String& parameterId,
-                  const juce::String& captionText,
-                  bool bipolar);
+    PlainKnob (juce::AudioProcessorValueTreeState&, const juce::String& parameterId,
+               const juce::String& caption, bool polarityMarks);
 
     void paint (juce::Graphics&) override;
     void resized() override;
 
-    void setKnobEnabled (bool shouldBeEnabled);
+    void setKnobEnabled (bool);
 
-    /** Gain controls are drawn larger than their frequency selectors, echoing
-        the hardware's concentric pairs where the gain is the dominant knob. */
-    void setKnobDiameter (int px) noexcept { diameter = px; resized(); }
+private:
+    juce::String caption;
+    Knob knob;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;
 
-    ArcSlider& getSlider() noexcept { return knob; }
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PlainKnob)
+};
 
-    /** Caption + knob + readout, stacked. Lets the editor size cells to their
-        content rather than stretching them down the whole section. */
-    int getPreferredHeight() const noexcept { return captionHeight + diameter + readoutHeight; }
+//==============================================================================
+/** A band: the frequency selector as a ring of detents, and the cut/boost
+    control inside it.
 
-    static constexpr int captionHeight = 15;
-    static constexpr int readoutHeight = 14;
+    This is how the module puts them -- one concentric pair per band, the
+    frequencies legended around the outside and the gain marked only with a
+    plus and a minus. Grab the ring to change frequency, the middle to change
+    gain. The frequency legend comes from the parameter itself, so the
+    high-pass relabels when the model changes.
+*/
+class ConcentricBand final : public juce::Component,
+                             private juce::Timer
+{
+public:
+    /** An empty gainParameterId gives a plain legended ring with nothing in
+        the middle, which is what the filters want. */
+    ConcentricBand (juce::AudioProcessorValueTreeState&,
+                    const juce::String& frequencyParameterId,
+                    const juce::String& gainParameterId,
+                    const juce::String& caption);
+
+    void paint (juce::Graphics&) override;
+    void resized() override;
+
+    void setRingEnabled (bool);
+    void setCentreEnabled (bool);
+
+    /** Where the caption sits, so a switch can be tucked beside it. */
+    juce::Rectangle<int> getCaptionArea() const;
 
 private:
     void timerCallback() override;
 
     juce::String caption;
-    juce::RangedAudioParameter* parameter = nullptr;
+    juce::RangedAudioParameter* frequency = nullptr;
 
-    ArcSlider  knob;
-    juce::Label readout;
+    Knob ring, centre;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> ringAttachment, centreAttachment;
 
-    juce::String lastText;
-    int diameter = 44;
+    juce::StringArray legend;
+    int lastLegendModel = -1;
+    juce::AudioProcessorValueTreeState& state;
 
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;
+    bool ringEnabled = true;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LabelledKnob)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ConcentricBand)
 };
 
 //==============================================================================
-/** Small rounded-rectangle toggle, lit when engaged. */
 class SwitchButton final : public juce::Component
 {
 public:
-    SwitchButton (juce::AudioProcessorValueTreeState& state,
-                  const juce::String& parameterId,
+    SwitchButton (juce::AudioProcessorValueTreeState&, const juce::String& parameterId,
                   const juce::String& text);
 
     void resized() override;
-    void setSwitchEnabled (bool shouldBeEnabled);
+    void setSwitchEnabled (bool);
 
 private:
     juce::ToggleButton button;
@@ -75,24 +93,33 @@ private:
 };
 
 //==============================================================================
-/** Peak meter. The audio thread publishes a level; this samples it on a timer
-    and decays smoothly, so the needle does not flicker at block rate. */
-class LevelMeter final : public juce::Component,
-                         private juce::Timer
+/** Output meter, switchable between peak dBFS and VU.
+
+    VU is not a different scale on the same number: it is an RMS reading with
+    slow ballistics, which is why it tells you about weight where a peak meter
+    tells you about headroom. 0 VU sits at -18 dBFS, the usual alignment.
+*/
+class OutputMeter final : public juce::Component,
+                          private juce::Timer
 {
 public:
-    LevelMeter (juce::String caption, std::function<float()> levelSource);
+    OutputMeter (std::function<float()> peakSource, std::function<float()> rmsSource);
 
     void paint (juce::Graphics&) override;
+    void mouseUp (const juce::MouseEvent&) override;
+
+    bool isVuMode() const noexcept { return vuMode; }
 
 private:
     void timerCallback() override;
 
-    juce::String caption;
-    std::function<float()> source;
+    std::function<float()> peak, rms;
     float displayed = 0.0f;
+    bool  vuMode = false;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LevelMeter)
+    static constexpr float kVuReference = -18.0f;   // dBFS at 0 VU
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (OutputMeter)
 };
 
 } // namespace frostyeq::gui

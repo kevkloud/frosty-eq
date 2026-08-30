@@ -59,6 +59,10 @@ public:
     float getInputPeak  (int ch) const noexcept { return read (inputPeak,  ch); }
     float getOutputPeak (int ch) const noexcept { return read (outputPeak, ch); }
 
+    /** RMS as well as peak, because a VU reading is not a peak reading on a
+        different scale -- it integrates, which is what makes it read weight. */
+    float getOutputRms (int ch) const noexcept { return read (outputRms, ch); }
+
     // Deliberately no accessor for the audio path's EqNetwork. The editor runs
     // on the message thread and the audio thread mutates those coefficients
     // continuously, so reading them to draw a curve would be a data race. The
@@ -119,6 +123,7 @@ private:
 
     std::array<std::atomic<float>, 2> inputPeak  { };
     std::array<std::atomic<float>, 2> outputPeak { };
+    std::array<std::atomic<float>, 2> outputRms  { };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (FrostyEqAudioProcessor)
 };

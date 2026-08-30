@@ -134,6 +134,124 @@ tight -- anti-aliasing still runs, it just runs at the host rate.
 
 ## Interface
 
+A channel strip, not an analyser. One column: gain at the top, the three bands
+below it as concentric pairs with their frequencies legended around the ring,
+the filters under those, and the output at the bottom.
+
+There is no response curve, no analyser, and **no numeric readout on any cut or
+boost**. A gain control is marked with a plus and a minus and nothing else,
+which is what the hardware does. That is deliberate, and it came from an
+engineer who has spent years on the actual units: the numbers make people mix
+with their eyes, hunting a tidy figure and flinching from a large move. Take
+them away and the ear decides. Frequency legends stay, because those are switch
+positions rather than amounts.
+
+The colour follows the module -- rose for the 1073, black for the 1084 -- so the
+panel says which one you are on without a label having to. It is not either
+unit's actual livery; copying that would be trade dress, and it invites the
+plugin to be judged as a failed clone rather than used on its own terms.
+
+The output meter switches between peak dBFS and VU on click. VU is not the same
+number on a different scale: it is an RMS reading with slow ballistics, 0 VU at
+-18 dBFS, which is why it reads weight where a peak meter reads headroom.
+
+Render the panel without launching a host:
+
+```bash
+./build/snapshot ui.png 360 792 model=1 mid_gain=9 mid_freq=5 mid_hiq=1
+```
+
+## Curve calibration
+
+Every branch constant is either fitted to a measurement or chosen for a stated
+reason. They began as estimates and the difference mattered -- the mid band was
+up to 15.8 % off its marked frequency, and the high-pass carried a 0.87 dB
+resonance the hardware does not have.
+
+Targets are traced from response plots of an assembled board published with the
+[Nyan-1073-EQ](https://github.com/ravettel/Nyan-1073-EQ) hardware project
+(CC BY-SA 4.0), read by calibrating against the plot axes and following each
+curve by colour rather than by eye.
+
+**Mid band.** Q is set per switch position. The circuit does not switch the
+band uniformly: the lower three positions switch inductance as well as
+capacitance, holding Q roughly level, while the upper three share one winding
+and switch capacitance alone, so Q climbs with frequency. Realised -3 dB widths
+at +18 dB land on the measured figures exactly -- 1.13, 1.00, 1.06, 1.15, 0.74
+and 0.52 octaves -- so 360 Hz is broad and musical and 7.2 kHz is a focused
+presence peak. Every detent peaks within 0.6 % of its marked frequency, tighter
+than the board that was measured, whose own peaks sit up to 6.6 % off.
+
+**Shelves.** Half first order, half second. Purely first order is too shallow
+at 4.9 dB/octave against a measured 7.0; purely second order carves a 6.5 dB
+hole an octave from a 12 dB boost. The blend gives 6.4 to 6.9 and brings the
+-3 dB corners inside 6 % of their marked frequencies.
+
+**High-pass.** Third-order Butterworth: one real pole and a pair at Q = 1.0.
+Maximally flat, which is what the hardware measures -- no peak whatever.
+Asymptotic slope 18.00 dB/octave against the quoted 18.
+
+That board is one reference, not ground truth: its shelves measure +18 to
++21 dB where the unit is specified at +/-16. Where its figures conflict with
+the published specification the specification wins, and each such point is
+noted in `ModelTables.h`.
+
+The tracing is in the repository too, so the targets can be checked rather than
+taken on trust:
+
+```bash
+uv venv && uv pip install pillow numpy
+.venv/bin/python tools/python/trace_measurements.py mid nyan1073_mid.png
+```
+
+```bash
+./build/measure bell     # realised centre and width, per mid detent
+./build/measure fitq     # solve branch Q from a measured width
+./build/measure shelf    # shelf slope, corner and dip
+./build/measure hpf      # high-pass corner, slope and resonance
+```
+
+## The two modules
+
+The 1084 is the 1073 with more options, and the differences come from the
+Neve 1073 & 1084 user manual (issue 5) rather than from retailer copy:
+
+| | 1073 | 1084 |
+|---|---|---|
+| High shelf | 12 kHz fixed, +/-16 dB | 10k / 12k / 16k, +/-16 dB |
+| Mid | +/-18 dB, fixed Q | +/-18 dB, switchable Hi-Q |
+| Low shelf | 35 / 60 / 110 / 220 Hz, +/-16 dB | same |
+| High pass | 18 dB/oct, 50 / 80 / 160 / 300 Hz | 18 dB/oct, 45 / 70 / 160 / 360 Hz |
+| Low pass | none | 18 dB/oct, 6 / 8 / 10 / 14 / 18 kHz |
+
+Two things worth flagging. The high-pass frequencies above are the original
+module's; AMS Neve's current page specifies the 1084 reissue with the 1073's
+set, so both figures are correct for different units and these follow the
+original. And the manual specifies the 1084's mid as "+/-12dB or +/-18dB
+peaking with switchable 'High Q'" without saying which range goes with which Q
+-- that is not modelled, and why is in `ModelTables.h`.
+
+In 1073 mode the controls the module does not have stay on the panel but grey
+out, and the DSP ignores them, so automation survives a model switch.
+
+## Cost
+
+Stereo, 48 kHz, measured as a fraction of one core on Apple silicon:
+
+| oversampling | % of a core |
+|---|---|
+| Off | 0.94 |
+| 2x (default) | 4.7 |
+| 4x | 9.9 |
+| 8x | 19.2 |
+
+Roughly 57 % of that is the four saturating stages, which evaluate an
+antiderivative in double precision per sample; the anti-imaging filters are
+about a fifth, and the equaliser the rest. Off is there for when a session is
+tight -- anti-aliasing still runs, it just runs at the host rate.
+
+## Interface
+
 The control layout follows the hardware, so anyone who has used a 1073 knows
 where things are: filters grouped together, the three bands running low to
 high, each a gain control with its stepped frequency selector directly beneath

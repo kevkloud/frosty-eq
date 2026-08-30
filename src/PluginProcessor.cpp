@@ -101,7 +101,7 @@ void FrostyEqAudioProcessor::prepareToPlay (double sampleRate, int maximumExpect
 
     dsp.prepare (sampleRate, maximumExpectedSamplesPerBlock, getTotalNumOutputChannels(), factor);
 
-    for (auto* a : { &inputPeak, &outputPeak })
+    for (auto* a : { &inputPeak, &outputPeak, &outputRms })
         for (auto& p : *a)
             p.store (0.0f, std::memory_order_relaxed);
 
@@ -168,8 +168,12 @@ void FrostyEqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
     dsp.process (buffer.getArrayOfWritePointers(), numOut, numSamples);
 
     for (int ch = 0; ch < juce::jmin (2, numOut); ++ch)
+    {
         outputPeak[(size_t) ch].store (buffer.getMagnitude (ch, 0, numSamples),
                                        std::memory_order_relaxed);
+        outputRms[(size_t) ch].store (buffer.getRMSLevel (ch, 0, numSamples),
+                                      std::memory_order_relaxed);
+    }
 }
 
 //==============================================================================

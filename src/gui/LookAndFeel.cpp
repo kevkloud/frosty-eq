@@ -3,13 +3,20 @@
 namespace frostyeq::gui
 {
 
-FrostyLookAndFeel::FrostyLookAndFeel()
+void FrostyLookAndFeel::refreshColours()
 {
-    setColour (juce::ResizableWindow::backgroundColourId, theme::background);
-    setColour (juce::Label::textColourId,                 theme::text);
-    setColour (juce::TooltipWindow::backgroundColourId,   theme::panel);
-    setColour (juce::TooltipWindow::textColourId,         theme::text);
-    setColour (juce::TooltipWindow::outlineColourId,      theme::outline);
+    const auto& p = theme::palette();
+
+    setColour (juce::ResizableWindow::backgroundColourId, p.background);
+    setColour (juce::Label::textColourId,                 p.text);
+    setColour (juce::ComboBox::backgroundColourId,        p.panel);
+    setColour (juce::ComboBox::textColourId,              p.text);
+    setColour (juce::ComboBox::outlineColourId,           p.outline);
+    setColour (juce::ComboBox::arrowColourId,             p.textDim);
+    setColour (juce::PopupMenu::backgroundColourId,       p.panel);
+    setColour (juce::PopupMenu::textColourId,             p.text);
+    setColour (juce::PopupMenu::highlightedBackgroundColourId, p.accent.withAlpha (0.3f));
+    setColour (juce::PopupMenu::highlightedTextColourId,  p.text);
 }
 
 juce::Font FrostyLookAndFeel::getLabelFont (juce::Label& label)
@@ -23,79 +30,76 @@ void FrostyLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w
                                           float sliderPos, float startAngle, float endAngle,
                                           juce::Slider& slider)
 {
-    const auto bounds = juce::Rectangle<int> (x, y, width, height).toFloat().reduced (2.0f);
-    const auto radius = juce::jmin (bounds.getWidth(), bounds.getHeight()) * 0.5f;
-    const auto centre = bounds.getCentre();
-    const auto* arc = dynamic_cast<ArcSlider*> (&slider);
-    const auto bipolar = arc != nullptr && arc->isBipolar();
-    const auto detents = arc != nullptr ? arc->getDetents() : 0;
+    const auto& p = theme::palette();
+    const auto* knob = dynamic_cast<Knob*> (&slider);
 
-    // Stepped controls need room outside the track for their detent marks.
-    const auto arcRadius = radius - theme::knobValue * 0.5f - (detents > 0 ? 4.0f : 0.0f);
+    const auto scale   = knob != nullptr ? knob->getFaceScale() : 1.0f;
+    const auto detents = knob != nullptr ? knob->getDetents() : 0;
+    const auto marks   = knob != nullptr && knob->hasPolarityMarks();
+
+    auto bounds = juce::Rectangle<int> (x, y, width, height).toFloat();
+    const auto full = juce::jmin (bounds.getWidth(), bounds.getHeight()) * 0.5f;
+    const auto radius = full * scale;
+    const auto centre = bounds.getCentre();
 
     const auto angle = startAngle + sliderPos * (endAngle - startAngle);
+    const auto enabled = slider.isEnabled();
 
-    // Track.
-    {
-        juce::Path track;
-        track.addCentredArc (centre.x, centre.y, arcRadius, arcRadius, 0.0f,
-                             startAngle, endAngle, true);
-        g.setColour (theme::outline);
-        g.strokePath (track, juce::PathStrokeType (theme::knobTrack, juce::PathStrokeType::curved,
-                                                   juce::PathStrokeType::rounded));
-    }
+    const auto face    = enabled ? p.knobFace : p.knobFace.withAlpha (0.4f);
+    const auto edge    = enabled ? p.knobEdge : p.knobEdge.withAlpha (0.4f);
+    const auto pointer = enabled ? p.pointer  : p.pointer.withAlpha (0.35f);
 
-    // Value arc: from the centre for bipolar controls, from the minimum
-    // otherwise -- the same convention Live uses.
-    if (detents == 0)
+    // Detent marks sit outside the face, where a switch's legend would be.
+    if (detents > 1)
     {
-        const auto from = bipolar ? startAngle + 0.5f * (endAngle - startAngle) : startAngle;
-
-        if (std::abs (angle - from) > 1.0e-4f)
-        {
-            juce::Path value;
-            value.addCentredArc (centre.x, centre.y, arcRadius, arcRadius, 0.0f,
-                                 juce::jmin (from, angle), juce::jmax (from, angle), true);
-            g.setColour (theme::accent);
-            g.strokePath (value, juce::PathStrokeType (theme::knobValue, juce::PathStrokeType::curved,
-                                                       juce::PathStrokeType::rounded));
-        }
-    }
-    else
-    {
-        // Stepped selector: mark each switch position, highlight the active one.
         for (int i = 0; i < detents; ++i)
         {
-            const auto t = detents > 1 ? (float) i / (float) (detents - 1) : 0.0f;
+            const auto t = (float) i / (float) (detents - 1);
             const auto a = startAngle + t * (endAngle - startAngle);
-            const auto inner = arcRadius + 3.0f;
-            const auto outer = arcRadius + (detents > 12 ? 6.0f : 7.0f);
+            const auto inner = radius + 3.0f;
+            const auto outer = radius + 7.0f;
 
             const juce::Point<float> p1 { centre.x + inner * std::sin (a), centre.y - inner * std::cos (a) };
             const juce::Point<float> p2 { centre.x + outer * std::sin (a), centre.y - outer * std::cos (a) };
 
             const auto isActive = std::abs (a - angle) < 1.0e-3f;
-            g.setColour (isActive ? theme::accent : theme::textDim.withAlpha (0.55f));
-            g.drawLine ({ p1, p2 }, isActive ? 2.5f : 1.4f);
+            g.setColour (isActive ? (enabled ? p.pointer : pointer) : edge);
+            g.drawLine ({ p1, p2 }, isActive ? 2.4f : 1.2f);
         }
     }
 
-    // Pointer.
+    // Face.
+    const auto faceBounds = juce::Rectangle<float> (radius * 2.0f, radius * 2.0f).withCentre (centre);
+    g.setColour (face);
+    g.fillEllipse (faceBounds);
+    g.setColour (edge);
+    g.drawEllipse (faceBounds.reduced (0.5f), 1.4f);
+
+    // Pointer, from the middle of the face to its edge.
     {
-        const auto tip  = arcRadius - 3.0f;
-        const auto tail = arcRadius * 0.35f;
+        const auto tip  = radius - 3.0f;
+        const auto tail = radius * 0.2f;
 
-        const juce::Point<float> p1 { centre.x + tail * std::sin (angle), centre.y - tail * std::cos (angle) };
-        const juce::Point<float> p2 { centre.x + tip  * std::sin (angle), centre.y - tip  * std::cos (angle) };
+        const juce::Point<float> a { centre.x + tail * std::sin (angle), centre.y - tail * std::cos (angle) };
+        const juce::Point<float> b { centre.x + tip  * std::sin (angle), centre.y - tip  * std::cos (angle) };
 
-        g.setColour (slider.isEnabled() ? theme::text : theme::textDim);
-        g.drawLine ({ p1, p2 }, 2.0f);
+        g.setColour (pointer);
+        g.drawLine ({ a, b }, 2.4f);
     }
 
-    if (! slider.isEnabled())
+    // A plus and a minus, and nothing else. No number, no arc.
+    if (marks)
     {
-        g.setColour (theme::background.withAlpha (0.55f));
-        g.fillEllipse (bounds);
+        g.setColour (enabled ? p.textDim : p.textDim.withAlpha (0.4f));
+        g.setFont (theme::labelFont (12.0f));
+
+        const auto side = radius + 11.0f;
+        const auto box = juce::Rectangle<float> (14.0f, 14.0f);
+
+        g.drawText ("-", box.withCentre ({ centre.x - side, centre.y + radius * 0.55f }),
+                    juce::Justification::centred, false);
+        g.drawText ("+", box.withCentre ({ centre.x + side, centre.y + radius * 0.55f }),
+                    juce::Justification::centred, false);
     }
 }
 
@@ -103,26 +107,26 @@ void FrostyLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w
 void FrostyLookAndFeel::drawToggleButton (juce::Graphics& g, juce::ToggleButton& button,
                                           bool shouldDrawHighlighted, bool shouldDrawDown)
 {
+    const auto& p = theme::palette();
     const auto bounds = button.getLocalBounds().toFloat().reduced (0.5f);
     const auto on = button.getToggleState();
 
-    auto fill = on ? theme::active : theme::inactive;
+    auto fill = on ? p.active : p.panel;
 
-    if (shouldDrawDown)          fill = fill.darker (0.25f);
-    else if (shouldDrawHighlighted) fill = fill.brighter (0.12f);
+    if (shouldDrawDown)             fill = fill.darker (0.2f);
+    else if (shouldDrawHighlighted) fill = fill.brighter (0.1f);
 
     if (! button.isEnabled())
         fill = fill.withAlpha (0.35f);
 
     g.setColour (fill);
     g.fillRoundedRectangle (bounds, theme::corner);
-
-    g.setColour (theme::outline);
+    g.setColour (p.outline);
     g.drawRoundedRectangle (bounds, theme::corner, 1.0f);
 
-    g.setColour (on ? juce::Colours::black.withAlpha (0.8f)
-                    : (button.isEnabled() ? theme::text : theme::textDim));
-    g.setFont (theme::labelFont (10.5f));
+    g.setColour (on ? p.background.contrasting (0.9f)
+                    : (button.isEnabled() ? p.text : p.textDim.withAlpha (0.5f)));
+    g.setFont (theme::labelFont (10.0f));
     g.drawText (button.getButtonText(), bounds, juce::Justification::centred, false);
 }
 

@@ -1,41 +1,66 @@
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
+#include "dsp/ModelTables.h"
 
 namespace frostyeq::theme
 {
 
-/** Palette and metrics.
+/** Two schemes, one per module, so the panel says which one you are on without
+    a label having to.
 
-    Styled after Ableton's stock devices rather than the original hardware:
-    flat, restrained, no bevels or skeuomorphism, controls drawn as thin value
-    arcs. Deliberately *not* a reproduction of the hardware's panel -- that
-    livery is trade dress, and copying it would raise the same problem as using
-    the name. The control layout follows the hardware; the finish does not.
+    Deliberately not a reproduction of either module's livery. Copying that
+    would be trade dress, and it invites the plugin to be judged as a failed
+    clone rather than used on its own terms.
 */
+struct Palette
+{
+    juce::Colour background, panel, outline, text, textDim;
+    juce::Colour knobFace, knobEdge, pointer, accent, active;
+    juce::Colour meterLow, meterHigh, meterClip, meterWell;
+};
 
-inline const juce::Colour background   { 0xff303030 };
-inline const juce::Colour panel        { 0xff383838 };
-inline const juce::Colour panelDeep    { 0xff1a1a1a };   // curve display well
-inline const juce::Colour outline      { 0xff4a4a4a };
-inline const juce::Colour grid         { 0xff2b2b2b };
-inline const juce::Colour gridEmphasis { 0xff3d3d3d };
+inline const Palette k1073
+{
+    juce::Colour (0xffc9808f),   // background: muted rose
+    juce::Colour (0xffd4909d),   // panel
+    juce::Colour (0xff8f5866),   // outline
+    juce::Colour (0xff2b1c21),   // text
+    juce::Colour (0xff6d4a53),   // textDim
+    juce::Colour (0xffe4b7c0),   // knobFace
+    juce::Colour (0xff8f5866),   // knobEdge
+    juce::Colour (0xff2b1c21),   // pointer
+    juce::Colour (0xff3d2930),   // accent
+    juce::Colour (0xfff0d9a0),   // active
+    juce::Colour (0xff4c7a4f),
+    juce::Colour (0xffb08a2e),
+    juce::Colour (0xff9c3b32),
+    juce::Colour (0xff7d4c58)    // meterWell
+};
 
-inline const juce::Colour text         { 0xffd8d8d8 };
-inline const juce::Colour textDim      { 0xff8c8c8c };
+inline const Palette k1084
+{
+    juce::Colour (0xff191919),   // background
+    juce::Colour (0xff242424),   // panel
+    juce::Colour (0xff3f3f3f),   // outline
+    juce::Colour (0xffdcdcdc),   // text
+    juce::Colour (0xff8a8a8a),   // textDim
+    juce::Colour (0xff2e2e2e),   // knobFace
+    juce::Colour (0xff4a4a4a),   // knobEdge
+    juce::Colour (0xffe6e6e6),   // pointer
+    juce::Colour (0xffd6d6d6),   // accent
+    juce::Colour (0xffe8b84b),   // active
+    juce::Colour (0xff7fbf5f),
+    juce::Colour (0xffe8b84b),
+    juce::Colour (0xffe05a4a),
+    juce::Colour (0xff101010)    // meterWell
+};
 
-inline const juce::Colour accent       { 0xff6fc3df };   // value arcs, EQ curve
-inline const juce::Colour accentSoft   { 0x336fc3df };
-inline const juce::Colour active       { 0xffe8b84b };   // engaged toggles
-inline const juce::Colour inactive     { 0xff4f4f4f };
+/** Current scheme. GUI only, message thread only. */
+const Palette& palette() noexcept;
+void setModel (Model) noexcept;
 
-inline const juce::Colour meterLow     { 0xff7fbf5f };
-inline const juce::Colour meterHigh    { 0xffe8b84b };
-inline const juce::Colour meterClip    { 0xffe05a4a };
-
-inline constexpr float knobTrack = 3.0f;
-inline constexpr float knobValue = 3.5f;
-inline constexpr float corner    = 3.0f;
+inline constexpr float corner = 3.0f;
 
 inline juce::Font labelFont (float height)
 {

@@ -64,9 +64,9 @@ if(NOT FROSTY_DSP_ONLY)
         src/params/ParameterLayout.cpp
         src/dsp/EqNetwork.cpp
         src/dsp/DspCore.cpp
+        src/gui/Theme.cpp
         src/gui/LookAndFeel.cpp
-        src/gui/Controls.cpp
-        src/gui/EqCurveDisplay.cpp)
+        src/gui/Controls.cpp)
 
     target_include_directories(FrostyEQ PRIVATE src)
 
