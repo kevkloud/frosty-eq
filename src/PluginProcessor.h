@@ -3,6 +3,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "params/ParameterLayout.h"
 #include "dsp/DspCore.h"
+#include "presets/PresetManager.h"
 #include <array>
 #include <atomic>
 
@@ -45,6 +46,7 @@ public:
 
     //== Ours ==================================================================
     juce::AudioProcessorValueTreeState& getApvts() noexcept  { return apvts; }
+    frostyeq::PresetManager& getPresets() noexcept           { return presets; }
 
     /** Rate the equaliser runs at, for the curve display. */
     double getEqSampleRate() const noexcept { return dsp.getEqSampleRate(); }
@@ -86,6 +88,10 @@ private:
     }
 
     juce::AudioProcessorValueTreeState apvts;
+
+    // Declared after apvts: it registers listeners on it, so it must be torn
+    // down first.
+    frostyeq::PresetManager presets { apvts };
 
     // Resolved once in the constructor. Looking parameters up by string ID on
     // the audio thread would be a hash lookup per block.

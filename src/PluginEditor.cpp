@@ -10,19 +10,21 @@ namespace
     // footprint of a comparable module plugin rather than towering over it.
     constexpr int kHeader    = 30;
     constexpr int kPad       = 10;
-    constexpr int kGainRow   = 68;
+    constexpr int kPresetRow = 24;
+    constexpr int kGainRow   = 62;
     constexpr int kBandRow   = 104;
     constexpr int kHiQRow    = 22;
     constexpr int kFilterRow = 96;
     constexpr int kSwitchRow = 32;
-    constexpr int kOutputRow = 74;
+    constexpr int kOutputRow = 68;
 
     const juce::String phaseGlyph = juce::String (juce::CharPointer_UTF8 ("\xc3\x98"));
 }
 
 //==============================================================================
 FrostyEqAudioProcessorEditor::Panel::Panel (FrostyEqAudioProcessor& p)
-    : inputGain   (p.getApvts(), P::kInputGain,   "INPUT",  true),
+    : presetBar   (p.getPresets()),
+      inputGain   (p.getApvts(), P::kInputGain,   "INPUT",  true),
       outputLevel (p.getApvts(), P::kOutputLevel, "OUTPUT", true),
       high     (p.getApvts(), P::kHfFreq,  P::kHfGain,  "HIGH"),
       mid      (p.getApvts(), P::kMidFreq, P::kMidGain, "MID"),
@@ -43,7 +45,7 @@ FrostyEqAudioProcessorEditor::Panel::Panel (FrostyEqAudioProcessor& p)
         p.getApvts(), P::kModel, modelChooser);
 
     for (auto* c : std::initializer_list<juce::Component*> {
-             &inputGain, &high, &mid, &low, &highPass, &lowPass,
+             &presetBar, &inputGain, &high, &mid, &low, &highPass, &lowPass,
              &eqIn, &phase, &midHiQ, &outputLevel, &meter })
         addAndMakeVisible (c);
 }
@@ -93,6 +95,8 @@ void FrostyEqAudioProcessorEditor::Panel::resized()
 
     modelChooser.setBounds (area.removeFromTop (kHeader)
                                 .removeFromRight (92).reduced (kPad, 6));
+
+    presetBar.setBounds (area.removeFromTop (kPresetRow));
 
     area.reduce (kPad, kPad / 2);
 

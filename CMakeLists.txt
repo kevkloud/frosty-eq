@@ -66,7 +66,9 @@ if(NOT FROSTY_DSP_ONLY)
         src/dsp/DspCore.cpp
         src/gui/Theme.cpp
         src/gui/LookAndFeel.cpp
-        src/gui/Controls.cpp)
+        src/gui/Controls.cpp
+        src/gui/PresetBar.cpp
+        src/presets/PresetManager.cpp)
 
     target_include_directories(FrostyEQ PRIVATE src)
 

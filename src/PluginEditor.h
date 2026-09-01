@@ -2,6 +2,7 @@
 
 #include "PluginProcessor.h"
 #include "gui/Controls.h"
+#include "gui/PresetBar.h"
 #include <memory>
 #include <vector>
 
@@ -35,7 +36,7 @@ public:
 
     /** The size everything is laid out at. Any other size is this, scaled. */
     static constexpr int kDesignWidth  = 260;
-    static constexpr int kDesignHeight = 740;
+    static constexpr int kDesignHeight = 752;
 
 private:
     //==========================================================================
@@ -51,6 +52,7 @@ private:
         void applyModel (bool is1084);
 
     private:
+        frostyeq::gui::PresetBar presetBar;
         juce::ComboBox modelChooser;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> modelAttachment;
 

@@ -1,4 +1,5 @@
 #include "PluginProcessor.h"
+#include "presets/PresetManager.h"
 #include <juce_events/juce_events.h>
 #include <iostream>
 
@@ -13,6 +14,16 @@ namespace
         if (! condition)
         {
             std::cerr << "FAIL: " << what << '\n';
+            ++failures;
+        }
+    }
+
+    void checkClose (double actual, double expected, double tolerance, const juce::String& what)
+    {
+        if (! (std::abs (actual - expected) <= tolerance))
+        {
+            std::cerr << "FAIL: " << what << " -- expected " << expected
+                      << " +/- " << tolerance << ", got " << actual << '\n';
             ++failures;
         }
     }
@@ -153,6 +164,125 @@ int main()
         for (int ch = 0; ch < 2; ++ch)
             for (int n = 0; n < 512; ++n)
                 check (std::isfinite (buffer.getReadPointer (ch)[n]), "output must be finite");
+    }
+
+
+    //== Presets ==============================================================
+    {
+        // Somewhere disposable, so a test run never touches real presets.
+        const auto sandbox = juce::File::getSpecialLocation (juce::File::tempDirectory)
+                                 .getChildFile ("FrostyEQPresetTests");
+        sandbox.deleteRecursively();
+        sandbox.createDirectory();
+        frostyeq::PresetManager::setDirectoryForTesting (sandbox);
+
+        FrostyEqAudioProcessor proc;
+        auto& presets = proc.getPresets();
+
+        check (! presets.getFactory().empty(), "there should be factory presets");
+
+        // Every factory preset must load and land on what it asks for.
+        for (int i = 0; i < (int) presets.getFactory().size(); ++i)
+        {
+            const auto& preset = presets.getFactory()[(size_t) i];
+            presets.loadFactory (i);
+
+            check (presets.getCurrentName() == preset.name,
+                   juce::String ("loading should name the preset, got ") + presets.getCurrentName());
+
+            check (! presets.isEdited(), "a freshly loaded preset is not edited");
+
+            for (const auto& setting : preset.settings)
+                check (std::abs (getValue (proc, setting.id) - setting.value) < 0.01f,
+                       juce::String ("preset \"") + preset.name + "\" should set " + setting.id
+                           + " to " + juce::String (setting.value) + ", got "
+                           + juce::String (getValue (proc, setting.id)));
+        }
+
+        // The guarantee that keeps presets honest: anything a preset does not
+        // mention goes back to its default, rather than inheriting whatever the
+        // previous preset left behind.
+        {
+            setValue (proc, P::kPhase, 1.0f);
+            setValue (proc, P::kMix,  40.0f);
+            setValue (proc, P::kLpfFreq, 4.0f);
+
+            presets.loadFactory (0);   // Init, which sets nothing
+
+            for (const auto& id : P::allIds())
+            {
+                auto* param = proc.getApvts().getParameter (id);
+                checkClose (param->getValue(), param->getDefaultValue(), 1.0e-5,
+                            juce::String ("loading a preset should default ") + id);
+            }
+        }
+
+        // Moving a control marks it edited; loading clears that again.
+        {
+            presets.loadFactory (1);
+            check (! presets.isEdited(), "just loaded, so not edited");
+
+            setValue (proc, P::kMidGain, 7.0f);
+            check (presets.isEdited(), "moving a control should mark the preset edited");
+
+            presets.loadFactory (1);
+            check (! presets.isEdited(), "reloading should clear the edited mark");
+        }
+
+        // Save, change everything, load it back.
+        {
+            presets.loadFactory (0);
+            setValue (proc, P::kMidGain,  -6.5f);
+            setValue (proc, P::kHpfFreq,   3.0f);
+            setValue (proc, P::kModel,     1.0f);
+
+            check (presets.saveUser ("Round Trip"), "saving a user preset should succeed");
+            check (presets.getUserNames().contains ("Round Trip"), "it should then be listed");
+            check (! presets.isEdited(), "saving should clear the edited mark");
+
+            presets.loadFactory (0);
+            checkClose (getValue (proc, P::kMidGain), 0.0f, 0.01, "cleared before reloading");
+
+            presets.loadUser ("Round Trip");
+            checkClose (getValue (proc, P::kMidGain), -6.5f, 0.01, "user preset restores mid gain");
+            checkClose (getValue (proc, P::kHpfFreq),  3.0f, 0.01, "user preset restores the filter");
+            checkClose (getValue (proc, P::kModel),    1.0f, 0.01, "user preset restores the model");
+        }
+
+        // Export somewhere else, import it back.
+        {
+            const auto away = sandbox.getChildFile ("elsewhere/Shared.frostyeq");
+
+            presets.loadUser ("Round Trip");
+            check (presets.exportTo (away), "exporting should write a file");
+            check (away.existsAsFile(), "and the file should be there");
+
+            presets.loadFactory (0);
+            check (presets.importFrom (away), "importing should succeed");
+
+            check (presets.getUserNames().contains ("Shared"),
+                   "an imported preset should join the list, not just load once");
+
+            checkClose (getValue (proc, P::kMidGain), -6.5f, 0.01, "import restores the settings");
+        }
+
+        // Stepping walks factory presets then the user's, and wraps.
+        {
+            presets.loadFactory (0);
+            presets.step (-1);
+            check (presets.getCurrentName() != "Init", "stepping back from the first should wrap");
+
+            presets.loadFactory (0);
+            presets.step (1);
+            check (presets.getCurrentName() == presets.getFactory()[1].name,
+                   "stepping forward should reach the next factory preset");
+        }
+
+        check (presets.deleteUser ("Round Trip"), "deleting a user preset should succeed");
+        check (! presets.getUserNames().contains ("Round Trip"), "and remove it from the list");
+
+        sandbox.deleteRecursively();
+        frostyeq::PresetManager::setDirectoryForTesting ({});
     }
 
     if (failures == 0)

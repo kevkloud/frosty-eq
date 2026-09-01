@@ -116,6 +116,35 @@ peaking with switchable 'High Q'" without saying which range goes with which Q
 In 1073 mode the controls the module does not have stay on the panel but grey
 out, and the DSP ignores them, so automation survives a model switch.
 
+## Presets
+
+A strip along the top: back, the name, forward, and a menu behind the name. An
+asterisk after the name means a control has moved since it was loaded, so it is
+clear when what is heard is no longer what the name says.
+
+Twelve ship with the plugin. They are starting points rather than verdicts --
+built from what these controls are conventionally used for and checked against
+what the model measures, but not yet checked by ear on real material, which is
+the only test that finally matters.
+
+Yours are plain files you can open, copy and back up:
+
+    macOS     ~/Library/Audio/Presets/LT3 Audio/FrostyEQ
+    Windows   %APPDATA%\LT3 Audio\FrostyEQ\Presets
+
+Sharing one is sending a file. A preset holds the same XML the plugin gives the
+host when it saves state, so presets and sessions stay compatible through the
+same version tag.
+
+Loading always returns every parameter to its default first. Without that a
+preset silently inherits whatever the last one left set, which is the usual way
+preset systems come to be quietly wrong, and there is a test pinning it.
+
+The factory list is not exposed as a host program list. Hosts may call
+setCurrentProgram while restoring a session, which would overwrite the state
+just loaded, and that is not something worth risking for a second way to reach
+the same presets.
+
 ## Cost
 
 Stereo, 48 kHz, measured as a fraction of one core on Apple silicon:
@@ -238,6 +267,35 @@ peaking with switchable 'High Q'" without saying which range goes with which Q
 
 In 1073 mode the controls the module does not have stay on the panel but grey
 out, and the DSP ignores them, so automation survives a model switch.
+
+## Presets
+
+A strip along the top: back, the name, forward, and a menu behind the name. An
+asterisk after the name means a control has moved since it was loaded, so it is
+clear when what is heard is no longer what the name says.
+
+Twelve ship with the plugin. They are starting points rather than verdicts --
+built from what these controls are conventionally used for and checked against
+what the model measures, but not yet checked by ear on real material, which is
+the only test that finally matters.
+
+Yours are plain files you can open, copy and back up:
+
+    macOS     ~/Library/Audio/Presets/LT3 Audio/FrostyEQ
+    Windows   %APPDATA%\LT3 Audio\FrostyEQ\Presets
+
+Sharing one is sending a file. A preset holds the same XML the plugin gives the
+host when it saves state, so presets and sessions stay compatible through the
+same version tag.
+
+Loading always returns every parameter to its default first. Without that a
+preset silently inherits whatever the last one left set, which is the usual way
+preset systems come to be quietly wrong, and there is a test pinning it.
+
+The factory list is not exposed as a host program list. Hosts may call
+setCurrentProgram while restoring a session, which would overwrite the state
+just loaded, and that is not something worth risking for a second way to reach
+the same presets.
 
 ## Cost
 

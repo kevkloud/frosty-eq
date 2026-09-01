@@ -17,6 +17,20 @@ void FrostyLookAndFeel::refreshColours()
     setColour (juce::PopupMenu::textColourId,             p.text);
     setColour (juce::PopupMenu::highlightedBackgroundColourId, p.accent.withAlpha (0.3f));
     setColour (juce::PopupMenu::highlightedTextColourId,  p.text);
+
+    // The preset strip is built from TextButtons, which otherwise come out in
+    // JUCE's default blue and fight whichever scheme is loaded.
+    setColour (juce::TextButton::buttonColourId,   p.panel);
+    setColour (juce::TextButton::buttonOnColourId, p.active);
+    setColour (juce::TextButton::textColourOffId,  p.text);
+    setColour (juce::TextButton::textColourOnId,   p.text);
+    setColour (juce::AlertWindow::backgroundColourId, p.panel);
+    setColour (juce::AlertWindow::textColourId,       p.text);
+    setColour (juce::AlertWindow::outlineColourId,    p.outline);
+    setColour (juce::TextEditor::backgroundColourId,  p.background);
+    setColour (juce::TextEditor::textColourId,        p.text);
+    setColour (juce::TextEditor::outlineColourId,     p.outline);
+    setColour (juce::TextEditor::highlightColourId,   p.accent.withAlpha (0.3f));
 }
 
 juce::Font FrostyLookAndFeel::getLabelFont (juce::Label& label)

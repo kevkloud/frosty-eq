@@ -69,6 +69,16 @@ private:
     std::atomic<int> model { (int) Model::m1073 };
 };
 
+/** Every parameter id, in panel order. Presets reset everything to its default
+    before applying their own settings, so a preset cannot leave a stray value
+    behind from whatever was loaded before it. */
+inline juce::StringArray allIds()
+{
+    return { kModel, kHfFreq, kHfGain, kMidFreq, kMidGain, kMidHiQ,
+             kLfFreq, kLfGain, kHpfFreq, kLpfFreq,
+             kInputGain, kOutputLevel, kEqIn, kPhase, kMix, kAutoGain, kOversampling };
+}
+
 //==============================================================================
 juce::AudioProcessorValueTreeState::ParameterLayout create();
 
