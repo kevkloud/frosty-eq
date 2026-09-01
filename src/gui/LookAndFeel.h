@@ -5,24 +5,29 @@
 namespace frostyeq::gui
 {
 
-/** A rotary control drawn as a potentiometer: a face, an edge and a pointer.
+/** A rotary control drawn as a potentiometer: a face and a pointer.
 
-    No value arc and no numeric readout. On the hardware a gain pot is marked
-    only with a plus on one side and a minus on the other, and that is the
-    point of it -- you make the move the sound needs rather than the move the
-    number suggests. Anyone mixing with their eyes will hunt for a tidy figure
-    and shy away from a large one.
+    No value readout of any kind on a cut or boost -- a plus one side, a minus
+    the other, and nothing else. That is what the hardware does, and it is the
+    point: numbers make people mix with their eyes, hunting a tidy figure and
+    flinching from a large move.
 */
 class Knob : public juce::Slider
 {
 public:
+    enum class Style
+    {
+        utility,    ///< blue face, dotted arc, plus and minus. Input and output.
+        filter,     ///< blue face, legend around it. The cut filters.
+        bandGain,   ///< pink face inside a band's ring.
+        bandRing    ///< the white frequency ring a band's gain sits inside.
+    };
+
     Knob() : juce::Slider (juce::Slider::RotaryVerticalDrag, juce::Slider::NoTextBox) {}
 
-    /** Marks a plus and a minus either side, for cut/boost controls. */
-    void setPolarityMarks (bool shouldShow) noexcept { polarityMarks = shouldShow; }
-    bool hasPolarityMarks() const noexcept           { return polarityMarks; }
+    void setStyle (Style s) noexcept   { style = s; }
+    Style getStyle() const noexcept    { return style; }
 
-    /** Stepped controls get a detent tick at each switch position. */
     void setDetents (int count) noexcept { detents = count; }
     int  getDetents() const noexcept     { return detents; }
 
@@ -31,7 +36,7 @@ public:
 
     /** The inner control of a concentric pair claims only its own circle, so
         the ring around it stays grabbable right up to the corners. */
-    void setCircularHitTest (bool shouldBeCircular) noexcept { circularHit = shouldBeCircular; }
+    void setCircularHitTest (bool b) noexcept { circularHit = b; }
 
     bool hitTest (int x, int y) override
     {
@@ -45,8 +50,8 @@ public:
     }
 
 private:
+    Style style = Style::utility;
     bool  circularHit = false;
-    bool  polarityMarks = false;
     int   detents = 0;
     float faceScale = 1.0f;
 };
@@ -55,6 +60,8 @@ private:
 class FrostyLookAndFeel final : public juce::LookAndFeel_V4
 {
 public:
+    FrostyLookAndFeel() { refreshColours(); }
+
     void refreshColours();
 
     void drawRotarySlider (juce::Graphics&, int x, int y, int width, int height,
@@ -65,6 +72,11 @@ public:
                            bool shouldDrawHighlighted, bool shouldDrawDown) override;
 
     juce::Font getLabelFont (juce::Label&) override;
+
+    /** A ring of dots, used for the gain track around a band and around the
+        input and output knobs. */
+    static void drawDottedArc (juce::Graphics&, juce::Point<float> centre, float radius,
+                               float startAngle, float endAngle, juce::Colour, float dotSize);
 };
 
 } // namespace frostyeq::gui

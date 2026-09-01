@@ -163,6 +163,85 @@ tight -- anti-aliasing still runs, it just runs at the host rate.
 
 ## Interface
 
+A channel strip, not an analyser, following a design from the engineer this is
+being built with. One narrow column: gain at the top, the three bands below it
+as concentric pairs, the cut filters under those, and the output at the bottom.
+
+Pink for the equaliser and its legends, blue for gain and filters, white rings,
+on a near-white panel. Deliberately not either module's real livery -- copying
+that would be trade dress, and it invites the plugin to be judged as a failed
+clone rather than used on its own terms.
+
+There is no response curve, no analyser, and **no numeric readout on any cut or
+boost**. A gain control carries a plus one side and a minus the other, and
+nothing else, which is what the hardware does. The reasoning came from someone
+who has spent years on the real units: numbers make people mix with their eyes,
+hunting a tidy figure and flinching from a large move. Frequency legends stay,
+because a switch position is not an amount.
+
+Each band is two controls in one. The white ring is the frequency selector,
+legended with its switch positions and marked in blue; the knob inside it is the
+cut and boost, with its setting shown on the pink dotted track around it. Grab
+the ring for frequency, the middle for gain.
+
+The panel is laid out once at 280 by 926 and scaled as a whole, so resizing
+scales knobs, legends, fonts and spacing together rather than reflowing.
+
+The output meter switches between peak dBFS and VU on click. VU is not the same
+number on a different scale: it is an RMS reading with slow ballistics, 0 VU at
+-18 dBFS, which is why it reads weight where a peak meter reads headroom.
+
+```bash
+./build/snapshot ui.png 280 926 model=1 mid_freq=4 hf_freq=2 mid_hiq=1
+```
+
+## Presets
+
+A strip along the top: back, the name, forward, and a menu behind the name. An
+asterisk after the name means a control has moved since it was loaded, so it is
+clear when what is heard is no longer what the name says.
+
+Twelve ship with the plugin. They are starting points rather than verdicts --
+built from what these controls are conventionally used for and checked against
+what the model measures, but not yet checked by ear on real material, which is
+the only test that finally matters.
+
+Yours are plain files you can open, copy and back up:
+
+    macOS     ~/Library/Audio/Presets/LT3 Audio/FrostyEQ
+    Windows   %APPDATA%\LT3 Audio\FrostyEQ\Presets
+
+Sharing one is sending a file. A preset holds the same XML the plugin gives the
+host when it saves state, so presets and sessions stay compatible through the
+same version tag.
+
+Loading always returns every parameter to its default first. Without that a
+preset silently inherits whatever the last one left set, which is the usual way
+preset systems come to be quietly wrong, and there is a test pinning it.
+
+The factory list is not exposed as a host program list. Hosts may call
+setCurrentProgram while restoring a session, which would overwrite the state
+just loaded, and that is not something worth risking for a second way to reach
+the same presets.
+
+## Cost
+
+Stereo, 48 kHz, measured as a fraction of one core on Apple silicon:
+
+| oversampling | % of a core |
+|---|---|
+| Off | 0.94 |
+| 2x (default) | 4.7 |
+| 4x | 9.9 |
+| 8x | 19.2 |
+
+Roughly 57 % of that is the four saturating stages, which evaluate an
+antiderivative in double precision per sample; the anti-imaging filters are
+about a fifth, and the equaliser the rest. Off is there for when a session is
+tight -- anti-aliasing still runs, it just runs at the host rate.
+
+## Interface
+
 A channel strip, not an analyser. One narrow column: gain at the top, the three
 bands below it as concentric pairs with their frequencies legended around the
 ring, the filters stacked under those, and the output at the bottom.

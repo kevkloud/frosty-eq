@@ -35,8 +35,8 @@ public:
     void resized() override;
 
     /** The size everything is laid out at. Any other size is this, scaled. */
-    static constexpr int kDesignWidth  = 260;
-    static constexpr int kDesignHeight = 752;
+    static constexpr int kDesignWidth  = 280;
+    static constexpr int kDesignHeight = 926;
 
 private:
     //==========================================================================
@@ -61,7 +61,9 @@ private:
         frostyeq::gui::SwitchButton eqIn, phase, midHiQ;
         frostyeq::gui::OutputMeter meter;
 
-        std::vector<int> dividers;
+        /** A section rule: a legend, optionally with a hairline either side. */
+        struct Rule { int y; juce::String text; bool lines; };
+        std::vector<Rule> rules;
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Panel)
     };

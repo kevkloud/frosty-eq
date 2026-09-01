@@ -6,17 +6,16 @@ namespace P = frostyeq::params;
 
 namespace
 {
-    // Row heights at design size. Sized so the whole strip sits in roughly the
-    // footprint of a comparable module plugin rather than towering over it.
-    constexpr int kHeader    = 30;
-    constexpr int kPad       = 10;
+    constexpr int kHeader    = 28;
     constexpr int kPresetRow = 24;
-    constexpr int kGainRow   = 62;
-    constexpr int kBandRow   = 104;
+    constexpr int kPad       = 10;
+
+    constexpr int kGainRow   = 100;   // knob plus the name under it
+    constexpr int kRuleRow   = 18;
+    constexpr int kBandRow   = 118;
     constexpr int kHiQRow    = 22;
-    constexpr int kFilterRow = 96;
-    constexpr int kSwitchRow = 32;
-    constexpr int kOutputRow = 68;
+    constexpr int kFilterRow = 80;
+    constexpr int kSwitchRow = 28;
 
     const juce::String phaseGlyph = juce::String (juce::CharPointer_UTF8 ("\xc3\x98"));
 }
@@ -24,16 +23,16 @@ namespace
 //==============================================================================
 FrostyEqAudioProcessorEditor::Panel::Panel (FrostyEqAudioProcessor& p)
     : presetBar   (p.getPresets()),
-      inputGain   (p.getApvts(), P::kInputGain,   "INPUT",  true),
-      outputLevel (p.getApvts(), P::kOutputLevel, "OUTPUT", true),
-      high     (p.getApvts(), P::kHfFreq,  P::kHfGain,  "HIGH"),
-      mid      (p.getApvts(), P::kMidFreq, P::kMidGain, "MID"),
-      low      (p.getApvts(), P::kLfFreq,  P::kLfGain,  "LOW"),
-      highPass (p.getApvts(), P::kHpfFreq, {},          "HIGH PASS"),
-      lowPass  (p.getApvts(), P::kLpfFreq, {},          "LOW PASS"),
+      inputGain   (p.getApvts(), P::kInputGain,   "INPUT"),
+      outputLevel (p.getApvts(), P::kOutputLevel, "OUTPUT"),
+      high     (p.getApvts(), P::kHfFreq,  P::kHfGain),
+      mid      (p.getApvts(), P::kMidFreq, P::kMidGain),
+      low      (p.getApvts(), P::kLfFreq,  P::kLfGain),
+      highPass (p.getApvts(), P::kHpfFreq, {}),
+      lowPass  (p.getApvts(), P::kLpfFreq, {}),
       eqIn   (p.getApvts(), P::kEqIn,   "EQL"),
       phase  (p.getApvts(), P::kPhase,  phaseGlyph),
-      midHiQ (p.getApvts(), P::kMidHiQ, "HI-Q"),
+      midHiQ (p.getApvts(), P::kMidHiQ, "HI-Q", true),
       meter  ([&p] { return juce::jmax (p.getOutputPeak (0), p.getOutputPeak (1)); },
               [&p] { return juce::jmax (p.getOutputRms  (0), p.getOutputRms  (1)); })
 {
@@ -54,13 +53,10 @@ void FrostyEqAudioProcessorEditor::Panel::applyModel (bool is1084)
 {
     // Controls the 1073 does not have stay on the panel but go dead, so
     // automation survives a model switch.
-    high   .setRingEnabled (is1084);      // the 1073's shelf is fixed at 12 kHz
-    lowPass.setRingEnabled (is1084);      // the low-pass is a 1084 addition
+    high   .setRingEnabled (is1084);   // the 1073's shelf is fixed at 12 kHz
+    lowPass.setRingEnabled (is1084);   // the cut filter above is a 1084 addition
     midHiQ .setSwitchEnabled (is1084);
 
-    // ComboBox copies its text colour into an internal label and only re-reads
-    // it when the look-and-feel object changes, so swapping the palette on the
-    // same object would leave the chooser painting in the previous scheme.
     sendLookAndFeelChange();
     repaint();
 }
@@ -74,52 +70,80 @@ void FrostyEqAudioProcessorEditor::Panel::paint (juce::Graphics& g)
     auto header = getLocalBounds().removeFromTop (kHeader);
     g.setColour (p.panel);
     g.fillRect (header);
-    g.setColour (p.outline);
-    g.drawHorizontalLine (header.getBottom() - 1, 0.0f, (float) getWidth());
 
     g.setColour (p.text);
-    g.setFont (theme::labelFont (12.5f));
+    g.setFont (theme::labelFont (12.5f, true));
     g.drawText ("FrostyEQ", header.reduced (kPad, 0), juce::Justification::centredLeft, false);
 
-    // Hairlines between sections, in place of boxes.
-    g.setColour (p.outline.withAlpha (0.5f));
-    for (auto y : dividers)
-        g.drawHorizontalLine (y, (float) kPad, (float) (getWidth() - kPad));
+    // Section legends, with a hairline running out to either side.
+    for (const auto& rule : rules)
+    {
+        g.setColour (p.pink);
+        g.setFont (theme::labelFont (14.0f, true));
+
+        const auto width = juce::jmax (44, juce::roundToInt (
+            juce::GlyphArrangement::getStringWidth (g.getCurrentFont(), rule.text)) + 16);
+        const auto box = juce::Rectangle<int> (0, rule.y, getWidth(), kRuleRow)
+                             .withSizeKeepingCentre (width, kRuleRow);
+
+        g.drawText (rule.text, box, juce::Justification::centred, false);
+
+        if (! rule.lines)
+            continue;
+
+        const auto y = (float) (rule.y + kRuleRow / 2);
+        const auto dashes = std::array<float, 2> { 2.0f, 3.0f };
+
+        g.setColour (p.hairline);
+        g.drawDashedLine ({ (float) kPad, y, (float) box.getX() - 6.0f, y },
+                          dashes.data(), 2, 1.0f);
+        g.drawDashedLine ({ (float) box.getRight() + 6.0f, y, (float) (getWidth() - kPad), y },
+                          dashes.data(), 2, 1.0f);
+    }
 }
 
 void FrostyEqAudioProcessorEditor::Panel::resized()
 {
-    dividers.clear();
-
+    rules.clear();
     auto area = getLocalBounds();
 
     modelChooser.setBounds (area.removeFromTop (kHeader)
-                                .removeFromRight (92).reduced (kPad, 6));
+                                .removeFromRight (88).reduced (kPad, 5));
 
     presetBar.setBounds (area.removeFromTop (kPresetRow));
+    area.reduce (kPad, 4);
 
-    area.reduce (kPad, kPad / 2);
+    const auto rule = [&] (const juce::String& text, bool lines)
+    {
+        rules.push_back ({ area.removeFromTop (kRuleRow).getY(), text, lines });
+    };
 
     inputGain.setBounds (area.removeFromTop (kGainRow));
-    dividers.push_back (area.getY());
 
+    rule ("HIGH", true);
     high.setBounds (area.removeFromTop (kBandRow));
 
-    // Hi-Q belongs to the mid band. The module puts it between the high and mid
-    // knobs, centred, so it goes there rather than floating to one side.
-    midHiQ.setBounds (area.removeFromTop (kHiQRow).withSizeKeepingCentre (52, 19));
+    // Hi-Q belongs to the mid band, so it sits with it rather than in a row of
+    // unrelated switches.
+    midHiQ.setBounds (area.removeFromTop (kHiQRow).withSizeKeepingCentre (58, 20));
 
+    rule ("MID", false);
     mid.setBounds (area.removeFromTop (kBandRow));
-    low.setBounds (area.removeFromTop (kBandRow));
-    dividers.push_back (area.getY());
 
+    rule ("LOW", true);
+    low.setBounds (area.removeFromTop (kBandRow));
+
+    rule ("LO-CUT", true);
     highPass.setBounds (area.removeFromTop (kFilterRow));
-    lowPass .setBounds (area.removeFromTop (kFilterRow));
-    dividers.push_back (area.getY());
+
+    rule ("HI-CUT", true);
+    lowPass.setBounds (area.removeFromTop (kFilterRow));
+
+    rule ({}, true);
 
     {
-        auto switches = area.removeFromTop (kSwitchRow).withTrimmedTop (5);
-        constexpr int eqlWidth = 52, phaseWidth = 32, gap = 8;
+        auto switches = area.removeFromTop (kSwitchRow).withTrimmedTop (2);
+        constexpr int eqlWidth = 56, phaseWidth = 44, gap = 8;
 
         auto group = switches.withSizeKeepingCentre (eqlWidth + gap + phaseWidth,
                                                      switches.getHeight());
@@ -131,15 +155,15 @@ void FrostyEqAudioProcessorEditor::Panel::resized()
     {
         // Knob and meter centred together, so the meter does not push the panel
         // wide from the edge.
-        auto bottom = area.removeFromTop (kOutputRow).withTrimmedTop (4);
+        auto bottom = area.removeFromTop (kGainRow);
 
-        constexpr int knobWidth = 84, meterWidth = 44, gap = 4;
+        constexpr int knobWidth = 130, meterWidth = 40, gap = 4;
         auto group = bottom.withSizeKeepingCentre (knobWidth + gap + meterWidth,
                                                    bottom.getHeight());
 
         outputLevel.setBounds (group.removeFromLeft (knobWidth));
         group.removeFromLeft (gap);
-        meter.setBounds (group.withSizeKeepingCentre (meterWidth, 54).translated (0, 4));
+        meter.setBounds (group.withSizeKeepingCentre (meterWidth, 52));
     }
 }
 
@@ -147,8 +171,6 @@ void FrostyEqAudioProcessorEditor::Panel::resized()
 FrostyEqAudioProcessorEditor::FrostyEqAudioProcessorEditor (FrostyEqAudioProcessor& p)
     : juce::AudioProcessorEditor (&p), processorRef (p), panel (p)
 {
-    const auto* model = p.getApvts().getRawParameterValue (P::kModel);
-    theme::setModel (model != nullptr && model->load() > 0.5f ? Model::m1084 : Model::m1073);
     lookAndFeel.refreshColours();
     setLookAndFeel (&lookAndFeel);
 
@@ -183,16 +205,11 @@ void FrostyEqAudioProcessorEditor::timerCallback()
         return;
 
     appliedModel = (int) is1084;
-
-    theme::setModel (is1084 ? Model::m1084 : Model::m1073);
-    lookAndFeel.refreshColours();
     panel.applyModel (is1084);
-    repaint();
 }
 
 void FrostyEqAudioProcessorEditor::resized()
 {
     // One uniform scale, so everything keeps its proportions.
-    const auto scale = (float) getWidth() / (float) kDesignWidth;
-    panel.setTransform (juce::AffineTransform::scale (scale));
+    panel.setTransform (juce::AffineTransform::scale ((float) getWidth() / (float) kDesignWidth));
 }

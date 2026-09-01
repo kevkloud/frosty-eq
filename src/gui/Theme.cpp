@@ -3,13 +3,10 @@
 namespace frostyeq::theme
 {
 
-namespace { const Palette* current = &k1073; }
+// One scheme for both modules. The design gives a single palette, and which
+// module is loaded is said by the chooser rather than by the colour.
+const Palette& palette() noexcept { return kLight; }
 
-const Palette& palette() noexcept { return *current; }
-
-void setModel (Model m) noexcept
-{
-    current = (m == Model::m1084) ? &k1084 : &k1073;
-}
+void setModel (Model) noexcept {}
 
 } // namespace frostyeq::theme

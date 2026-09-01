@@ -7,12 +7,13 @@
 namespace frostyeq::gui
 {
 
-/** Caption and a knob. No value readout of any kind. */
+/** A gain control with its name underneath and nothing else: no number, only a
+    plus one side and a minus the other. Input and output. */
 class PlainKnob final : public juce::Component
 {
 public:
     PlainKnob (juce::AudioProcessorValueTreeState&, const juce::String& parameterId,
-               const juce::String& caption, bool polarityMarks);
+               const juce::String& caption);
 
     void paint (juce::Graphics&) override;
     void resized() override;
@@ -28,49 +29,43 @@ private:
 };
 
 //==============================================================================
-/** A band: the frequency selector as a ring of detents, and the cut/boost
-    control inside it.
+/** A band, or a filter.
 
-    This is how the module puts them -- one concentric pair per band, the
-    frequencies legended around the outside and the gain marked only with a
-    plus and a minus. Grab the ring to change frequency, the middle to change
-    gain. The frequency legend comes from the parameter itself, so the
-    high-pass relabels when the model changes.
+    With a gain parameter it is a band: the frequency selector is the white ring,
+    legended with its switch positions, and the cut and boost sits inside it.
+    Grab the ring for frequency, the middle for gain. That is how the module
+    puts them, one concentric pair per band.
+
+    Without one it is a filter: a single knob with the same legend around it.
+
+    The legend comes from the parameter, so the cut filter relabels itself when
+    the model changes.
 */
 class ConcentricBand final : public juce::Component,
                              private juce::Timer
 {
 public:
-    /** An empty gainParameterId gives a plain legended ring with nothing in
-        the middle, which is what the filters want. */
     ConcentricBand (juce::AudioProcessorValueTreeState&,
                     const juce::String& frequencyParameterId,
-                    const juce::String& gainParameterId,
-                    const juce::String& caption);
+                    const juce::String& gainParameterId);
 
     void paint (juce::Graphics&) override;
     void resized() override;
 
     void setRingEnabled (bool);
-    void setCentreEnabled (bool);
-
-    /** Where the caption sits, so a switch can be tucked beside it. */
-    juce::Rectangle<int> getCaptionArea() const;
 
 private:
     void timerCallback() override;
 
-    juce::String caption;
     juce::RangedAudioParameter* frequency = nullptr;
+    juce::AudioProcessorValueTreeState& state;
 
     Knob ring, centre;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> ringAttachment, centreAttachment;
 
     juce::StringArray legend;
     int lastLegendModel = -1;
-    juce::AudioProcessorValueTreeState& state;
-
-    bool ringEnabled = true;
+    bool hasCentre = false, ringEnabled = true;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ConcentricBand)
 };
@@ -79,8 +74,9 @@ private:
 class SwitchButton final : public juce::Component
 {
 public:
+    /** `blue` picks the Hi-Q tint; everything else is pink. */
     SwitchButton (juce::AudioProcessorValueTreeState&, const juce::String& parameterId,
-                  const juce::String& text);
+                  const juce::String& text, bool blue = false);
 
     void resized() override;
     void setSwitchEnabled (bool);
@@ -93,11 +89,11 @@ private:
 };
 
 //==============================================================================
-/** Output meter, switchable between peak dBFS and VU.
+/** Output meter, switchable between peak dBFS and VU by clicking it.
 
     VU is not a different scale on the same number: it is an RMS reading with
-    slow ballistics, which is why it tells you about weight where a peak meter
-    tells you about headroom. 0 VU sits at -18 dBFS, the usual alignment.
+    slow ballistics, 0 VU at -18 dBFS, which is why it reads weight where a peak
+    meter reads headroom.
 */
 class OutputMeter final : public juce::Component,
                           private juce::Timer
@@ -108,8 +104,6 @@ public:
     void paint (juce::Graphics&) override;
     void mouseUp (const juce::MouseEvent&) override;
 
-    bool isVuMode() const noexcept { return vuMode; }
-
 private:
     void timerCallback() override;
 
@@ -117,8 +111,8 @@ private:
     float displayed = 0.0f;
     bool  vuMode = false;
 
-    static constexpr float kVuReference = -18.0f;   // dBFS at 0 VU
-    static constexpr int   kBarWidth    = 16;       // the label is wider than this
+    static constexpr float kVuReference = -18.0f;
+    static constexpr int   kBarWidth    = 14;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (OutputMeter)
 };

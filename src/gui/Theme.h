@@ -6,65 +6,54 @@
 namespace frostyeq::theme
 {
 
-/** Two schemes, one per module, so the panel says which one you are on without
-    a label having to.
+/** Light scheme, from the design: pink for the equaliser bands and the
+    section legends, blue for gain and filters, white rings, everything on a
+    near-white panel.
 
-    Deliberately not a reproduction of either module's livery. Copying that
+    Deliberately not a reproduction of either module's livery -- copying that
     would be trade dress, and it invites the plugin to be judged as a failed
     clone rather than used on its own terms.
 */
 struct Palette
 {
-    juce::Colour background, panel, outline, text, textDim;
-    juce::Colour knobFace, knobEdge, pointer, accent, active;
+    juce::Colour background, panel, outline, hairline;
+    juce::Colour text, textDim;
+    juce::Colour blue, blueFill, pink, pinkFill, white;
     juce::Colour meterLow, meterHigh, meterClip, meterWell;
 };
 
-inline const Palette k1073
+inline const Palette kLight
 {
-    juce::Colour (0xffc9808f),   // background: muted rose
-    juce::Colour (0xffd4909d),   // panel
-    juce::Colour (0xff8f5866),   // outline
-    juce::Colour (0xff2b1c21),   // text
-    juce::Colour (0xff6d4a53),   // textDim
-    juce::Colour (0xffe4b7c0),   // knobFace
-    juce::Colour (0xff8f5866),   // knobEdge
-    juce::Colour (0xff2b1c21),   // pointer
-    juce::Colour (0xff3d2930),   // accent
-    juce::Colour (0xfff0d9a0),   // active
-    juce::Colour (0xff4c7a4f),
-    juce::Colour (0xffb08a2e),
-    juce::Colour (0xff9c3b32),
-    juce::Colour (0xff7d4c58)    // meterWell
+    juce::Colour (0xffefefef),   // background
+    juce::Colour (0xffe4e4e4),   // panel: header and preset strip
+    juce::Colour (0xff9e9e9e),   // outline: knob edges
+    juce::Colour (0xffb4b4b4),   // hairline: section rules
+
+    juce::Colour (0xff6f6f6f),   // text
+    juce::Colour (0xff9a9a9a),   // textDim
+
+    juce::Colour (0xff4fb8e8),   // blue: frequency legends, gain knobs
+    juce::Colour (0xff7fd0f2),   // blueFill: knob faces, Hi-Q
+    juce::Colour (0xfff08cb4),   // pink: section legends, plus and minus
+    juce::Colour (0xfffbc8d9),   // pinkFill: band knob faces, EQL and phase
+    juce::Colour (0xffffffff),   // white: rings, pointers, button text
+
+    juce::Colour (0xff6bbf7a),
+    juce::Colour (0xffe0b040),
+    juce::Colour (0xffe0685a),
+    juce::Colour (0xffd6d6d6)    // meterWell
 };
 
-inline const Palette k1084
-{
-    juce::Colour (0xff191919),   // background
-    juce::Colour (0xff242424),   // panel
-    juce::Colour (0xff3f3f3f),   // outline
-    juce::Colour (0xffdcdcdc),   // text
-    juce::Colour (0xff8a8a8a),   // textDim
-    juce::Colour (0xff2e2e2e),   // knobFace
-    juce::Colour (0xff4a4a4a),   // knobEdge
-    juce::Colour (0xffe6e6e6),   // pointer
-    juce::Colour (0xffd6d6d6),   // accent
-    juce::Colour (0xffe8b84b),   // active
-    juce::Colour (0xff7fbf5f),
-    juce::Colour (0xffe8b84b),
-    juce::Colour (0xffe05a4a),
-    juce::Colour (0xff101010)    // meterWell
-};
-
-/** Current scheme. GUI only, message thread only. */
 const Palette& palette() noexcept;
 void setModel (Model) noexcept;
 
 inline constexpr float corner = 3.0f;
 
-inline juce::Font labelFont (float height)
+inline juce::Font labelFont (float height, bool bold = false)
 {
-    return juce::Font (juce::FontOptions {}.withHeight (height));
+    return juce::Font (juce::FontOptions {}
+                           .withHeight (height)
+                           .withStyle (bold ? "Bold" : "Regular"));
 }
 
 } // namespace frostyeq::theme
