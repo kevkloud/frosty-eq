@@ -58,9 +58,7 @@ class DspCore
 public:
     struct Params
     {
-        Model model = Model::m1073;
-
-        int hfFreqIndex  = 1;   // 10k / 12k / 16k  (1084 only; 1073 forces 12k)
+        int hfFreqIndex  = 1;   // 10k / 12k / 16k
         int midFreqIndex = 2;
         int lfFreqIndex  = 1;
         int hpfIndex     = 0;   // 0 == off

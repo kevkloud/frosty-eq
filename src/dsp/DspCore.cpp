@@ -46,8 +46,7 @@ namespace
 
     bool sameSettings (const EqSettings& a, const EqSettings& b) noexcept
     {
-        return a.model == b.model
-            && a.midHiQ == b.midHiQ
+        return a.midHiQ == b.midHiQ
             && exactly (a.hfFreqHz,  b.hfFreqHz)  && exactly (a.hfGainDb,  b.hfGainDb)
             && exactly (a.midFreqHz, b.midFreqHz) && exactly (a.midGainDb, b.midGainDb)
             && exactly (a.lfFreqHz,  b.lfFreqHz)  && exactly (a.lfGainDb,  b.lfGainDb)
@@ -143,7 +142,7 @@ void DspCore::setParams (const Params& p) noexcept
 {
     params = p;
 
-    const auto hfHz  = highShelfFreq (p.model, p.hfFreqIndex);
+    const auto hfHz  = highShelfFreq (p.hfFreqIndex);
     const auto midHz = midFreq (p.midFreqIndex);
     const auto lfHz  = lowShelfFreq (p.lfFreqIndex);
 
@@ -178,7 +177,6 @@ void DspCore::setParams (const Params& p) noexcept
 void DspCore::updateCoefficients (int activeChannels) noexcept
 {
     EqSettings s;
-    s.model     = params.model;
     s.hfFreqHz  = fromLog2Hz (hfFreqSm.tick());
     s.midFreqHz = fromLog2Hz (midFreqSm.tick());
     s.lfFreqHz  = fromLog2Hz (lfFreqSm.tick());
@@ -186,8 +184,8 @@ void DspCore::updateCoefficients (int activeChannels) noexcept
     s.midGainDb = midGainSm.tick();
     s.lfGainDb  = lfGainSm.tick();
     s.midHiQ    = params.midHiQ;
-    s.hpfFreqHz = hpfFreq (params.model, params.hpfIndex);
-    s.lpfFreqHz = lpfFreq (params.model, params.lpfIndex);
+    s.hpfFreqHz = hpfFreq (params.hpfIndex);
+    s.lpfFreqHz = lpfFreq (params.lpfIndex);
 
     if (settingsValid && sameSettings (s, currentSettings))
         return;

@@ -41,15 +41,11 @@ void EqNetwork::reset() noexcept
 //==============================================================================
 void EqNetwork::setSettings (const EqSettings& s) noexcept
 {
-    // The 1073's shelf is fixed at 12 kHz whatever the selector says; only the
-    // 1084 can move it.
-    const auto hfHz = (s.model == Model::m1084) ? s.hfFreqHz : kHighShelfFreq1073;
-
     lowBranch .setCutoff (clampCutoff (s.lfFreqHz, sampleRate), sampleRate);
-    highBranch.setCutoff (clampCutoff (hfHz,       sampleRate), sampleRate);
+    highBranch.setCutoff (clampCutoff (s.hfFreqHz, sampleRate), sampleRate);
     const auto midQ = s.midQ > 0.0f
                         ? s.midQ
-                        : midBranchQ (s.midFreqHz, s.midHiQ && s.model == Model::m1084);
+                        : midBranchQ (s.midFreqHz, s.midHiQ);
 
     midBranch .setCutoff (clampCutoff (s.midFreqHz, sampleRate), midQ, sampleRate);
 
@@ -75,7 +71,7 @@ void EqNetwork::setSettings (const EqSettings& s) noexcept
         hpf2.setCutoff (hz, kHpfQ, sampleRate);
     }
 
-    lpfActive = s.lpfFreqHz > 0.0f && s.model == Model::m1084;
+    lpfActive = s.lpfFreqHz > 0.0f;
 
     if (lpfActive)
     {

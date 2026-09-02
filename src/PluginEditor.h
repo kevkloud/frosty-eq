@@ -25,8 +25,7 @@
     soon as it is not at its default size. A single uniform transform scales
     knobs, legends, fonts and spacing together.
 */
-class FrostyEqAudioProcessorEditor final : public juce::AudioProcessorEditor,
-                                           private juce::Timer
+class FrostyEqAudioProcessorEditor final : public juce::AudioProcessorEditor
 {
 public:
     explicit FrostyEqAudioProcessorEditor (FrostyEqAudioProcessor&);
@@ -36,7 +35,7 @@ public:
 
     /** The size everything is laid out at. Any other size is this, scaled. */
     static constexpr int kDesignWidth  = 280;
-    static constexpr int kDesignHeight = 926;
+    static constexpr int kDesignHeight = 828;
 
 private:
     //==========================================================================
@@ -49,15 +48,11 @@ private:
         void paint (juce::Graphics&) override;
         void resized() override;
 
-        void applyModel (bool is1084);
-
     private:
         frostyeq::gui::PresetBar presetBar;
-        juce::ComboBox modelChooser;
-        std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> modelAttachment;
 
         frostyeq::gui::PlainKnob inputGain, outputLevel;
-        frostyeq::gui::ConcentricBand high, mid, low, highPass, lowPass;
+        frostyeq::gui::ConcentricBand high, mid, low, highPass;
         frostyeq::gui::SwitchButton eqIn, phase, midHiQ;
         frostyeq::gui::OutputMeter meter;
 
@@ -68,13 +63,8 @@ private:
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Panel)
     };
 
-    void timerCallback() override;
-
-    FrostyEqAudioProcessor& processorRef;
     frostyeq::gui::FrostyLookAndFeel lookAndFeel;
     Panel panel;
-
-    int appliedModel = -1;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (FrostyEqAudioProcessorEditor)
 };

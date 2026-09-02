@@ -9,8 +9,6 @@ namespace frostyeq
 
 struct EqSettings
 {
-    Model model      = Model::m1073;
-
     float hfFreqHz   = 12000.0f;
     float hfGainDb   = 0.0f;
 

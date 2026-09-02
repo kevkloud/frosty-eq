@@ -108,19 +108,11 @@ ConcentricBand::ConcentricBand (juce::AudioProcessorValueTreeState& s,
             state, gainParameterId, centre);
     }
 
-    startTimerHz (8);
-    timerCallback();
+    buildLegend();
 }
 
-void ConcentricBand::timerCallback()
+void ConcentricBand::buildLegend()
 {
-    const auto* model = state.getRawParameterValue (params::kModel);
-    const auto current = model != nullptr ? (int) model->load (std::memory_order_relaxed) : 0;
-
-    if (current == lastLegendModel && ! legend.isEmpty())
-        return;
-
-    lastLegendModel = current;
     legend.clear();
 
     if (auto* choice = dynamic_cast<juce::AudioParameterChoice*> (frequency))

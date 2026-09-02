@@ -7,7 +7,7 @@
 //   measure thd    [--freq f] [--level dBFS] [--in dB] [--os n]
 //   measure profile  -- distortion against frequency and level
 //   measure alias    -- folded-image rejection
-//   measure curve  [--model 1073|1084] [--lf i:dB] [--mid i:dB] [--hf i:dB]
+//   measure curve  [--lf i:dB] [--mid i:dB] [--hf i:dB]
 //                  [--hpf i] [--lpf i] [--hiq]
 //   measure bands  -- band-interaction table
 //   measure q      -- realised bell width vs gain
@@ -454,7 +454,7 @@ namespace
 
         for (int position = 1; position <= 4; ++position)
         {
-            const auto marked = hpfFreq (Model::m1073, position);
+            const auto marked = hpfFreq (position);
 
             EqSettings s;
             s.hpfFreqHz = marked;
@@ -558,12 +558,11 @@ int main (int argc, char** argv)
         const auto* next = (i + 1 < argc) ? argv[i + 1] : nullptr;
 
         if      (a == "--hiq")                    s.midHiQ = true;
-        else if (a == "--model" && next)          s.model  = (std::string (next) == "1084") ? Model::m1084 : Model::m1073;
         else if (a == "--lf"  && next && parseBand (next, index, gainDb)) { s.lfFreqHz  = lowShelfFreq (index);        s.lfGainDb  = gainDb; }
         else if (a == "--mid" && next && parseBand (next, index, gainDb)) { s.midFreqHz = midFreq (index);             s.midGainDb = gainDb; }
-        else if (a == "--hf"  && next && parseBand (next, index, gainDb)) { s.hfFreqHz  = highShelfFreq (s.model, index); s.hfGainDb = gainDb; }
-        else if (a == "--hpf" && next)            s.hpfFreqHz = hpfFreq (s.model, std::atoi (next));
-        else if (a == "--lpf" && next)            s.lpfFreqHz = lpfFreq (s.model, std::atoi (next));
+        else if (a == "--hf"  && next && parseBand (next, index, gainDb)) { s.hfFreqHz  = highShelfFreq (index); s.hfGainDb = gainDb; }
+        else if (a == "--hpf" && next)            s.hpfFreqHz = hpfFreq (std::atoi (next));
+        else if (a == "--lpf" && next)            s.lpfFreqHz = lpfFreq (std::atoi (next));
     }
 
     auto net = make (s);

@@ -48,13 +48,8 @@ public:
     juce::AudioProcessorValueTreeState& getApvts() noexcept  { return apvts; }
     frostyeq::PresetManager& getPresets() noexcept           { return presets; }
 
-    /** Rate the equaliser runs at, for the curve display. */
+    /** Rate the equaliser runs at. */
     double getEqSampleRate() const noexcept { return dsp.getEqSampleRate(); }
-
-    frostyeq::Model getCurrentModel() const noexcept
-    {
-        return (frostyeq::Model) (int) modelParam->load (std::memory_order_relaxed);
-    }
 
     /** Metering, written by the audio thread and polled by the editor on a
         timer. Publish-and-sample; never push from audio to UI. */
@@ -96,7 +91,6 @@ private:
     // Resolved once in the constructor. Looking parameters up by string ID on
     // the audio thread would be a hash lookup per block.
     // Resolved once in the constructor.
-    std::atomic<float>* modelParam        = nullptr;
     std::atomic<float>* hfFreqParam       = nullptr;
     std::atomic<float>* hfGainParam       = nullptr;
     std::atomic<float>* midFreqParam      = nullptr;
@@ -114,8 +108,6 @@ private:
     std::atomic<float>* autoGainParam     = nullptr;
     std::atomic<float>* oversamplingParam = nullptr;
 
-    // The high-pass selector's labels depend on the active model.
-    frostyeq::params::PositionalChoice* hpfFreqChoice = nullptr;
 
     frostyeq::DspCore dsp;
 
@@ -124,8 +116,6 @@ private:
     // the host with setLatencySamples and updateHostDisplay calls on every
     // move, which is enough to destabilise it.
     std::atomic<int> reportedLatency { -1 };
-    std::atomic<int> pendingModel { -1 };
-    int lastReportedModel = -1;
 
     std::array<std::atomic<float>, 2> inputPeak  { };
     std::array<std::atomic<float>, 2> outputPeak { };

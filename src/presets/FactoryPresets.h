@@ -46,7 +46,7 @@ inline std::vector<Factory> factory()
 
         { "Vocal Air", {
             { kHpfFreq, 2 },        // 80 Hz -- nothing useful lives below it
-            { kHfGain, 4.0f },      // the fixed 12 kHz shelf, which is the point of a 1073
+            { kHfGain, 4.0f },      // air off the 12 kHz shelf
             { kMidFreq, 3 }, { kMidGain, 1.5f },
             { kInputGain, 5.0f }, { kOutputLevel, -5.0f } } },
 
@@ -97,15 +97,13 @@ inline std::vector<Factory> factory()
             { kInputGain, 7.0f }, { kOutputLevel, -7.0f },
             { kAutoGain, 1.0f } } },               // level-matched, so it is judged on tone
 
-        { "Presence Lift (1084)", {
-            { kModel, 1 },
-            { kHfFreq, 2 }, { kHfGain, 4.0f },     // 16 kHz, which the 1073 has not got
+        { "Presence Lift", {
+            { kHfFreq, 2 }, { kHfGain, 4.0f },     // 16 kHz
             { kMidFreq, 5 }, { kMidGain, 3.0f }, { kMidHiQ, 1.0f },
             { kHpfFreq, 2 },
             { kInputGain, 4.0f }, { kOutputLevel, -4.0f } } },
 
-        { "Telephone (1084)", {
-            { kModel, 1 },
+        { "Telephone", {
             { kHpfFreq, 4 },                       // 360 Hz
             { kLpfFreq, 1 },                       // 6 kHz
             { kMidFreq, 2 }, { kMidGain, 8.0f }, { kMidHiQ, 1.0f },

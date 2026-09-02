@@ -41,8 +41,7 @@ private:
     The legend comes from the parameter, so the cut filter relabels itself when
     the model changes.
 */
-class ConcentricBand final : public juce::Component,
-                             private juce::Timer
+class ConcentricBand final : public juce::Component
 {
 public:
     ConcentricBand (juce::AudioProcessorValueTreeState&,
@@ -55,7 +54,7 @@ public:
     void setRingEnabled (bool);
 
 private:
-    void timerCallback() override;
+    void buildLegend();
 
     juce::RangedAudioParameter* frequency = nullptr;
     juce::AudioProcessorValueTreeState& state;
@@ -64,7 +63,6 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> ringAttachment, centreAttachment;
 
     juce::StringArray legend;
-    int lastLegendModel = -1;
     bool hasCentre = false, ringEnabled = true;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ConcentricBand)

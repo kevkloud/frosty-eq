@@ -17,7 +17,6 @@ namespace frostyeq::params
 // must, add a new ID and migrate on load.
 //==============================================================================
 
-inline constexpr auto kModel        = "model";
 inline constexpr auto kHfFreq       = "hf_freq";
 inline constexpr auto kHfGain       = "hf_gain";
 inline constexpr auto kMidFreq      = "mid_freq";
@@ -39,42 +38,12 @@ inline constexpr auto kOversampling = "oversampling";
 inline constexpr int kVersionHint  = 1;
 inline constexpr int kStateVersion = 1;
 
-//==============================================================================
-/** A stepped selector whose displayed labels depend on which console model is
-    active, while its automation value stays a plain switch position.
-
-    The 1073 and 1084 high-pass filters have different frequencies at the same
-    detents (50/80/160/300 vs 45/70/160/360). Encoding the *position* rather
-    than the frequency means switching models lands you on the corresponding
-    detent of the other unit's table, deterministically and round-trip-safely,
-    and it sidesteps the fact that a VST3 discrete parameter cannot change its
-    step count at runtime.
-*/
-class PositionalChoice final : public juce::AudioParameterChoice
-{
-public:
-    PositionalChoice (juce::ParameterID pid,
-                      const juce::String& paramName,
-                      juce::StringArray labels1073,
-                      juce::StringArray labels1084,
-                      int defaultIndex);
-
-    juce::String getText (float normalisedValue, int maximumStringLength) const override;
-
-    /** Called by the processor whenever the model parameter changes. */
-    void setModel (Model m) noexcept { model.store ((int) m, std::memory_order_relaxed); }
-
-private:
-    juce::StringArray labelsA, labelsB;
-    std::atomic<int> model { (int) Model::m1073 };
-};
-
 /** Every parameter id, in panel order. Presets reset everything to its default
     before applying their own settings, so a preset cannot leave a stray value
     behind from whatever was loaded before it. */
 inline juce::StringArray allIds()
 {
-    return { kModel, kHfFreq, kHfGain, kMidFreq, kMidGain, kMidHiQ,
+    return { kHfFreq, kHfGain, kMidFreq, kMidGain, kMidHiQ,
              kLfFreq, kLfGain, kHpfFreq, kLpfFreq,
              kInputGain, kOutputLevel, kEqIn, kPhase, kMix, kAutoGain, kOversampling };
 }

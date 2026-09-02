@@ -29,36 +29,16 @@ FrostyEqAudioProcessorEditor::Panel::Panel (FrostyEqAudioProcessor& p)
       mid      (p.getApvts(), P::kMidFreq, P::kMidGain),
       low      (p.getApvts(), P::kLfFreq,  P::kLfGain),
       highPass (p.getApvts(), P::kHpfFreq, {}),
-      lowPass  (p.getApvts(), P::kLpfFreq, {}),
       eqIn   (p.getApvts(), P::kEqIn,   "EQL"),
       phase  (p.getApvts(), P::kPhase,  phaseGlyph),
       midHiQ (p.getApvts(), P::kMidHiQ, "HI-Q", true),
       meter  ([&p] { return juce::jmax (p.getOutputPeak (0), p.getOutputPeak (1)); },
               [&p] { return juce::jmax (p.getOutputRms  (0), p.getOutputRms  (1)); })
 {
-    modelChooser.addItemList ({ "1073", "1084" }, 1);
-    modelChooser.setJustificationType (juce::Justification::centred);
-    addAndMakeVisible (modelChooser);
-
-    modelAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (
-        p.getApvts(), P::kModel, modelChooser);
-
     for (auto* c : std::initializer_list<juce::Component*> {
-             &presetBar, &inputGain, &high, &mid, &low, &highPass, &lowPass,
+             &presetBar, &inputGain, &high, &mid, &low, &highPass,
              &eqIn, &phase, &midHiQ, &outputLevel, &meter })
         addAndMakeVisible (c);
-}
-
-void FrostyEqAudioProcessorEditor::Panel::applyModel (bool is1084)
-{
-    // Controls the 1073 does not have stay on the panel but go dead, so
-    // automation survives a model switch.
-    high   .setRingEnabled (is1084);   // the 1073's shelf is fixed at 12 kHz
-    lowPass.setRingEnabled (is1084);   // the cut filter above is a 1084 addition
-    midHiQ .setSwitchEnabled (is1084);
-
-    sendLookAndFeelChange();
-    repaint();
 }
 
 //==============================================================================
@@ -107,8 +87,7 @@ void FrostyEqAudioProcessorEditor::Panel::resized()
     rules.clear();
     auto area = getLocalBounds();
 
-    modelChooser.setBounds (area.removeFromTop (kHeader)
-                                .removeFromRight (88).reduced (kPad, 5));
+    area.removeFromTop (kHeader);
 
     presetBar.setBounds (area.removeFromTop (kPresetRow));
     area.reduce (kPad, 4);
@@ -135,9 +114,6 @@ void FrostyEqAudioProcessorEditor::Panel::resized()
 
     rule ("LO-CUT", true);
     highPass.setBounds (area.removeFromTop (kFilterRow));
-
-    rule ("HI-CUT", true);
-    lowPass.setBounds (area.removeFromTop (kFilterRow));
 
     rule ({}, true);
 
@@ -169,7 +145,7 @@ void FrostyEqAudioProcessorEditor::Panel::resized()
 
 //==============================================================================
 FrostyEqAudioProcessorEditor::FrostyEqAudioProcessorEditor (FrostyEqAudioProcessor& p)
-    : juce::AudioProcessorEditor (&p), processorRef (p), panel (p)
+    : juce::AudioProcessorEditor (&p), panel (p)
 {
     lookAndFeel.refreshColours();
     setLookAndFeel (&lookAndFeel);
@@ -183,9 +159,6 @@ FrostyEqAudioProcessorEditor::FrostyEqAudioProcessorEditor (FrostyEqAudioProcess
     setResizeLimits (kDesignWidth * 2 / 3, kDesignHeight * 2 / 3,
                      kDesignWidth * 2,     kDesignHeight * 2);
     setSize (kDesignWidth, kDesignHeight);
-
-    startTimerHz (10);
-    timerCallback();
 }
 
 FrostyEqAudioProcessorEditor::~FrostyEqAudioProcessorEditor()
@@ -194,20 +167,6 @@ FrostyEqAudioProcessorEditor::~FrostyEqAudioProcessorEditor()
 }
 
 //==============================================================================
-void FrostyEqAudioProcessorEditor::timerCallback()
-{
-    const auto* model = processorRef.getApvts().getRawParameterValue (P::kModel);
-    const auto is1084 = model != nullptr && model->load (std::memory_order_relaxed) > 0.5f;
-
-    // Tri-state: a bool initialised to false would match the default model and
-    // skip the first update, leaving the 1084-only controls looking live.
-    if (appliedModel == (int) is1084)
-        return;
-
-    appliedModel = (int) is1084;
-    panel.applyModel (is1084);
-}
-
 void FrostyEqAudioProcessorEditor::resized()
 {
     // One uniform scale, so everything keeps its proportions.

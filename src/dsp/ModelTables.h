@@ -6,14 +6,14 @@
 namespace frostyeq
 {
 
-/** The two console modules we model. The 1084 is very nearly a superset of the
-    1073: same low-shelf and mid-bell frequencies, more high-shelf options, a
-    switchable narrow Q on the mid band, a different high-pass table, and an
-    additional low-pass filter.
-*/
-enum class Model { m1073 = 0, m1084 = 1 };
-
-inline constexpr int kNumModels = 2;
+// Only the 1084 is modelled. The 1073 was removed: it was the same equaliser
+// with fewer options -- one high-shelf frequency instead of three, no switchable
+// mid Q, no low-pass, and a different low-cut table -- so keeping it meant
+// carrying a second set of tables and a branch through every filter for a
+// strictly smaller feature set.
+//
+// Every frequency below is from the Neve 1073 & 1084 user manual, issue 5, and
+// tests hold both the panel legends and the filter tuning to them.
 
 //==============================================================================
 // Frequency tables, in Hz.
@@ -29,10 +29,8 @@ inline constexpr int kNumModels = 2;
 // deterministic and round-trip-safe, which is what we want for saved sessions.
 //==============================================================================
 
-// High shelf. The 1073 has a single fixed 12 kHz shelf; the selector is present
-// but inert in 1073 mode, and the editor greys it out.
-inline constexpr std::array<float, 3> kHighShelfFreqs1084 { 10000.0f, 12000.0f, 16000.0f };
-inline constexpr float kHighShelfFreq1073 = 12000.0f;
+// High shelf: +/-16 dB shelving at 10, 12 or 16 kHz.
+inline constexpr std::array<float, 3> kHighShelfFreqs { 10000.0f, 12000.0f, 16000.0f };
 
 // Mid bell. Identical on both units.
 inline constexpr std::array<float, 6> kMidFreqs { 360.0f, 700.0f, 1600.0f, 3200.0f, 4800.0f, 7200.0f };
@@ -40,12 +38,13 @@ inline constexpr std::array<float, 6> kMidFreqs { 360.0f, 700.0f, 1600.0f, 3200.
 // Low shelf. Identical on both units.
 inline constexpr std::array<float, 4> kLowShelfFreqs { 35.0f, 60.0f, 110.0f, 220.0f };
 
-// High-pass, 18 dB/octave. The two units differ here.
-inline constexpr std::array<float, 4> kHpfFreqs1073 { 50.0f, 80.0f, 160.0f, 300.0f };
-inline constexpr std::array<float, 4> kHpfFreqs1084 { 45.0f, 70.0f, 160.0f, 360.0f };
+// Low cut, 18 dB/octave. Retailers sometimes quote the 1073's 50/80/160/300 for
+// this module; the manual gives these, and the resistor modification it
+// describes changes termination rather than frequency.
+inline constexpr std::array<float, 4> kHpfFreqs { 45.0f, 70.0f, 160.0f, 360.0f };
 
-// Low-pass. 1084 only; inert in 1073 mode.
-inline constexpr std::array<float, 5> kLpfFreqs1084 { 6000.0f, 8000.0f, 10000.0f, 14000.0f, 18000.0f };
+// High cut, 18 dB/octave.
+inline constexpr std::array<float, 5> kLpfFreqs { 6000.0f, 8000.0f, 10000.0f, 14000.0f, 18000.0f };
 
 //==============================================================================
 // Branch Q values.
@@ -128,13 +127,10 @@ inline constexpr float kHpfQ       = 1.00f;
 inline constexpr float kLpfQ       = 1.00f;
 
 //==============================================================================
-inline constexpr float highShelfFreq (Model m, int position) noexcept
+inline constexpr float highShelfFreq (int position) noexcept
 {
-    if (m != Model::m1084)
-        return kHighShelfFreq1073;
-
     const auto i = (position < 0 ? 0 : (position > 2 ? 2 : position));
-    return kHighShelfFreqs1084[(size_t) i];
+    return kHighShelfFreqs[(size_t) i];
 }
 
 inline constexpr float midFreq (int position) noexcept
@@ -183,31 +179,25 @@ inline float midBranchQ (float hz, bool hiQ) noexcept
     return hiQ ? q * kMidHiQFactor : q;
 }
 
-/** Low-pass, 1084 only. Position 0 is Off, hence the -1. Returns 0 for Off. */
-inline constexpr float lpfFreq (Model m, int position) noexcept
+/** High cut. Position 0 is Off, hence the -1. Returns 0 for Off. */
+inline constexpr float lpfFreq (int position) noexcept
 {
-    if (m != Model::m1084 || position <= 0)
+    if (position <= 0)
         return 0.0f;
 
     const auto i = (position > 5 ? 5 : position) - 1;
-    return kLpfFreqs1084[(size_t) i];
+    return kLpfFreqs[(size_t) i];
 }
 
-/** High-pass. Position 0 is Off, hence the -1. Returns 0 for Off. */
-inline constexpr float hpfFreq (Model m, int position) noexcept
+/** Low cut. Position 0 is Off, hence the -1. Returns 0 for Off. */
+inline constexpr float hpfFreq (int position) noexcept
 {
     if (position <= 0)
         return 0.0f;
 
     const auto i = (position > 4 ? 4 : position) - 1;
-    return m == Model::m1084 ? kHpfFreqs1084[(size_t) i] : kHpfFreqs1073[(size_t) i];
+    return kHpfFreqs[(size_t) i];
 }
 
-/** True for controls the 1073 does not have. The DSP ignores them and the
-    editor greys them out, but the parameters always exist so that automation
-    and saved state survive a model switch. */
-inline constexpr bool isHighShelfSelectable (Model m) noexcept { return m == Model::m1084; }
-inline constexpr bool isMidHiQAvailable     (Model m) noexcept { return m == Model::m1084; }
-inline constexpr bool isLowPassAvailable    (Model m) noexcept { return m == Model::m1084; }
 
 } // namespace frostyeq

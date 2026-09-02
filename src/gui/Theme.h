@@ -1,7 +1,6 @@
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
-#include "dsp/ModelTables.h"
 
 namespace frostyeq::theme
 {
@@ -45,7 +44,6 @@ inline const Palette kLight
 };
 
 const Palette& palette() noexcept;
-void setModel (Model) noexcept;
 
 inline constexpr float corner = 3.0f;
 

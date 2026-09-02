@@ -219,7 +219,6 @@ int main()
     // what processSample() actually does, the plugin lies to the user.
     {
         EqSettings s;
-        s.model     = Model::m1084;
         s.lfFreqHz  = 110.0f; s.lfGainDb  = 8.0f;
         s.midFreqHz = 3200.0f; s.midGainDb = -10.0f; s.midHiQ = true;
         s.hfFreqHz  = 16000.0f; s.hfGainDb = 6.0f;
@@ -374,7 +373,7 @@ int main()
         for (int position = 1; position <= 4; ++position)
         {
             EqSettings h;
-            h.hpfFreqHz = hpfFreq (Model::m1073, position);
+            h.hpfFreqHz = hpfFreq (position);
             auto filter = makeNetwork (h);
 
             double peak = -100.0, peakHz = 0.0;
@@ -404,7 +403,6 @@ int main()
             for (int f = 0; f < 6; ++f)
             {
                 EqSettings s;
-                s.model     = (Model) model;
                 s.midFreqHz = kMidFreqs[(size_t) f];
                 s.midGainDb = 18.0f;
                 s.lfGainDb  = 16.0f;
@@ -535,8 +533,7 @@ int main()
             for (int block = 0; block < 200; ++block)
             {
                 DspCore::Params p;
-                p.model        = (block % 2) ? Model::m1084 : Model::m1073;
-                p.midFreqIndex = block % 6;
+                                p.midFreqIndex = block % 6;
                 p.hpfIndex     = block % 5;
                 p.midGainDb    = ((block % 7) - 3) * 6.0f;
                 core.setParams (p);
@@ -822,7 +819,6 @@ int main()
 
         // Hi-Q narrows whatever the position already was.
         EqSettings s;
-        s.model     = Model::m1084;
         s.midFreqHz = 1600.0f;
         s.midGainDb = 9.0f;
         auto wide = makeNetwork (s);
@@ -835,57 +831,60 @@ int main()
     }
 
 
-    //== 18. The 1084 is a superset, and the 1073 ignores what it lacks =====
+    //== 18. Every control tunes where the manual says ======================
+    // Frequencies live both in the tables the filters are tuned from and in the
+    // strings the panel prints, and nothing ties the two together, so they are
+    // checked against each other in the parameter tests as well. These figures
+    // are from the Neve 1073 & 1084 user manual, issue 5.
     {
-        // Low-pass: 1084 only, and 18 dB/octave like the high-pass. It was a
+        // High cut: 18 dB/octave, like the low cut. It was built as a
         // second-order 12 dB/octave section until the manual was checked.
         {
             EqSettings s;
-            s.model     = Model::m1084;
             s.lpfFreqHz = 6000.0f;
 
             // Well above the host rate, so bilinear warping does not flatter
-            // the measurement; the asymptote is what the 18 dB/octave refers to.
+            // the measurement; the asymptote is what 18 dB/octave refers to.
             EqNetwork wide;
             wide.prepare (768000.0);
             wide.setSettings (s);
 
-            const auto perOctave = wide.magnitudeDbAt (24000.0) - wide.magnitudeDbAt (12000.0);
-            checkClose (perOctave, -18.0, 1.0, "the 1084 low-pass should fall 18 dB per octave");
+            checkClose (wide.magnitudeDbAt (24000.0) - wide.magnitudeDbAt (12000.0), -18.0, 1.0,
+                        "the high cut should fall 18 dB per octave");
 
             checkClose (wide.magnitudeDbAt (6000.0), -3.0, 0.35,
-                        "the low-pass should be 3 dB down at its marked frequency");
+                        "the high cut should be 3 dB down at its marked frequency");
 
             double peak = -100.0;
             for (int i = 0; i < 1200; ++i)
                 peak = std::max (peak, wide.magnitudeDbAt (20.0 * std::pow (1000.0, (double) i / 1199.0)));
 
-            check (peak < 0.1, "the low-pass must not resonate, got " + std::to_string (peak) + " dB");
+            check (peak < 0.1, "the high cut must not resonate, got " + std::to_string (peak) + " dB");
         }
 
-        // The same setting does nothing on a 1073, which has no low-pass.
+        // Cut filter tables.
         {
-            EqSettings s;
-            s.model     = Model::m1073;
-            s.lpfFreqHz = 6000.0f;
-            auto net = makeNetwork (s);
+            const float lowCut[4]  { 45.0f, 70.0f, 160.0f, 360.0f };
+            const float highCut[5] { 6000.0f, 8000.0f, 10000.0f, 14000.0f, 18000.0f };
 
-            checkClose (net.magnitudeDbAt (15000.0), 0.0, 0.05,
-                        "a 1073 must ignore the low-pass entirely");
+            for (int position = 1; position <= 4; ++position)
+                checkClose (hpfFreq (position), lowCut[position - 1], 0.5,
+                            "low cut detent " + std::to_string (position));
+
+            for (int position = 1; position <= 5; ++position)
+                checkClose (lpfFreq (position), highCut[position - 1], 0.5,
+                            "high cut detent " + std::to_string (position));
+
+            check (hpfFreq (0) == 0.0f && lpfFreq (0) == 0.0f, "detent 0 is Off on both");
         }
 
-        // High shelf: three frequencies on the 1084, fixed at 12 kHz on a 1073.
+        // The high shelf moves; it is not fixed.
         {
             for (int position = 0; position < 3; ++position)
-                checkClose (highShelfFreq (Model::m1084, position),
-                            kHighShelfFreqs1084[(size_t) position], 1.0,
-                            "the 1084 high shelf should follow its selector");
+                checkClose (highShelfFreq (position), kHighShelfFreqs[(size_t) position], 1.0,
+                            "the high shelf should follow its selector");
 
-            for (int position = 0; position < 3; ++position)
-                checkClose (highShelfFreq (Model::m1073, position), 12000.0, 1.0,
-                            "the 1073 high shelf is fixed at 12 kHz");
-
-            EqSettings a; a.model = Model::m1084; a.hfFreqHz = 10000.0f; a.hfGainDb = 12.0f;
+            EqSettings a; a.hfFreqHz = 10000.0f; a.hfGainDb = 12.0f;
             EqSettings b = a; b.hfFreqHz = 16000.0f;
 
             auto low = makeNetwork (a);
@@ -895,54 +894,24 @@ int main()
                    "a 10 kHz shelf should lift 8 kHz more than a 16 kHz one does");
         }
 
-        // High-pass: the two modules put different frequencies on the same
-        // detents. These are the original module's figures; the current
-        // reissue is specified with the 1073's set.
-        {
-            const float expected1073[4] { 50.0f, 80.0f, 160.0f, 300.0f };
-            const float expected1084[4] { 45.0f, 70.0f, 160.0f, 360.0f };
-
-            for (int position = 1; position <= 4; ++position)
-            {
-                checkClose (hpfFreq (Model::m1073, position), expected1073[position - 1], 0.5,
-                            "1073 high-pass detent " + std::to_string (position));
-                checkClose (hpfFreq (Model::m1084, position), expected1084[position - 1], 0.5,
-                            "1084 high-pass detent " + std::to_string (position));
-            }
-
-            check (hpfFreq (Model::m1073, 0) == 0.0f && hpfFreq (Model::m1084, 0) == 0.0f,
-                   "detent 0 is Off on both");
-        }
-
-        // Hi-Q narrows the mid, and only on the 1084.
+        // Hi-Q narrows the mid without detuning it.
         {
             EqSettings s;
-            s.model = Model::m1073;
             s.midFreqHz = 1600.0f;
             s.midGainDb = 12.0f;
 
-            auto plain = makeNetwork (s);
-            s.midHiQ = true;
-            auto ignored = makeNetwork (s);
-
-            checkClose (bellWidthOctaves (ignored, 1600.0, 3.0),
-                        bellWidthOctaves (plain, 1600.0, 3.0), 0.01,
-                        "a 1073 must ignore Hi-Q, which it does not have");
-
-            s.model = Model::m1084;
-            auto narrow = makeNetwork (s);
-            s.midHiQ = false;
             auto wide = makeNetwork (s);
+            s.midHiQ = true;
+            auto narrow = makeNetwork (s);
 
-            const auto narrowOct = bellWidthOctaves (narrow, 1600.0, 3.0);
             const auto wideOct   = bellWidthOctaves (wide, 1600.0, 3.0);
+            const auto narrowOct = bellWidthOctaves (narrow, 1600.0, 3.0);
 
             check (narrowOct < wideOct * 0.75,
-                   "Hi-Q should clearly narrow the 1084's mid ("
+                   "Hi-Q should clearly narrow the mid ("
                        + std::to_string (wideOct) + " to " + std::to_string (narrowOct)
                        + " octaves)");
 
-            // Both still peak where the panel says.
             for (auto* net : { &narrow, &wide })
             {
                 double best = -1.0e9, peak = 1600.0;
@@ -952,9 +921,36 @@ int main()
                     const auto db = net->magnitudeDbAt (hz);
                     if (db > best) { best = db; peak = hz; }
                 }
-                checkClose (peak, 1600.0, 1600.0 * 0.025,
-                            "Hi-Q must not detune the mid band");
+                checkClose (peak, 1600.0, 1600.0 * 0.025, "Hi-Q must not detune the mid band");
             }
+        }
+    }
+
+    //== 19. Turning a gain control up must boost ===========================
+    // The panel marks a plus at one end of each gain control and a minus at the
+    // other. They were on the wrong sides -- the pointer reached the plus at
+    // minimum gain -- so this pins the direction in the DSP, which is what the
+    // marks have to describe. Nothing here is about drawing.
+    {
+        struct Band { const char* name; float EqSettings::* gain; double probeHz; };
+
+        const Band bands[] {
+            { "mid",        &EqSettings::midGainDb, 1600.0 },
+            { "low shelf",  &EqSettings::lfGainDb,  40.0 },
+            { "high shelf", &EqSettings::hfGainDb,  16000.0 },
+        };
+
+        for (const auto& band : bands)
+        {
+            EqSettings up;
+            up.*(band.gain) = 12.0f;
+            check (makeNetwork (up).magnitudeDbAt (band.probeHz) > 3.0,
+                   std::string ("a positive ") + band.name + " setting must boost");
+
+            EqSettings down;
+            down.*(band.gain) = -12.0f;
+            check (makeNetwork (down).magnitudeDbAt (band.probeHz) < -3.0,
+                   std::string ("a negative ") + band.name + " setting must cut");
         }
     }
 

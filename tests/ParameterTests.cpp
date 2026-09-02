@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "presets/PresetManager.h"
+#include "dsp/ModelTables.h"
 #include <juce_events/juce_events.h>
 #include <iostream>
 
@@ -57,45 +58,26 @@ int main()
     //== Schema ================================================================
     {
         FrostyEqAudioProcessor proc;
-        check (proc.getParameters().size() == 17,
-               "expected 17 parameters, got " + juce::String (proc.getParameters().size()));
+        check (proc.getParameters().size() == 16,
+               "expected 16 parameters, got " + juce::String (proc.getParameters().size()));
     }
 
-    //== Model-dependent selector labels ======================================
-    // The two units put different frequencies on the same high-pass detents.
-    // The automation value is the switch position; only the label changes.
+    //== Selector labels ======================================================
     {
         FrostyEqAudioProcessor proc;
+
         auto& hpf = param (proc, P::kHpfFreq);
-
         setValue (proc, P::kHpfFreq, 1.0f);           // detent 1
-        const auto position = hpf.getValue();
-
-        setValue (proc, P::kModel, (float) (int) frostyeq::Model::m1073);
-        check (hpf.getCurrentValueAsText() == "50 Hz",
-               "1073 HPF detent 1 should read '50 Hz', got '" + hpf.getCurrentValueAsText() + "'");
-
-        setValue (proc, P::kModel, (float) (int) frostyeq::Model::m1084);
         check (hpf.getCurrentValueAsText() == "45 Hz",
-               "1084 HPF detent 1 should read '45 Hz', got '" + hpf.getCurrentValueAsText() + "'");
+               "low cut detent 1 should read '45 Hz', got '" + hpf.getCurrentValueAsText() + "'");
 
-        check (juce::approximatelyEqual (hpf.getValue(), position),
-               "switching model must not move the switch position");
-
-        // The high-shelf selector reads the same in both models -- only the
-        // 1084 can actually move the shelf, and the clamp lives in the DSP so
-        // the menu does not show three identical entries.
         auto& hf = param (proc, P::kHfFreq);
         setValue (proc, P::kHfFreq, 2.0f);
         check (hf.getCurrentValueAsText() == "16 kHz",
                "HF detent 2 should read '16 kHz', got '" + hf.getCurrentValueAsText() + "'");
 
-        for (int hfPos = 0; hfPos < 3; ++hfPos)
-            check (juce::approximatelyEqual (frostyeq::highShelfFreq (frostyeq::Model::m1073, hfPos), 12000.0f),
-                   "the 1073's shelf is fixed at 12 kHz whatever the selector says");
-
-        check (juce::approximatelyEqual (frostyeq::highShelfFreq (frostyeq::Model::m1084, 2), 16000.0f),
-               "the 1084's shelf should follow the selector");
+        check (juce::approximatelyEqual (frostyeq::highShelfFreq (2), 16000.0f),
+               "the high shelf should follow the selector");
     }
 
     //== State round-trip ======================================================
@@ -105,7 +87,6 @@ int main()
 
         struct Setting { const char* id; float value; };
         const Setting settings[] {
-            { P::kModel,        1.0f },   // 1084
             { P::kHfGain,       7.5f },
             { P::kMidFreq,      4.0f },   // 4.8 kHz
             { P::kMidGain,    -11.25f },
@@ -139,9 +120,8 @@ int main()
                    juce::String ("state round-trip lost '") + s.id + "': expected "
                        + juce::String (s.value) + ", got " + juce::String (getValue (restored, s.id)));
 
-        // Labels must follow the restored model, not the default.
         check (param (restored, P::kHpfFreq).getCurrentValueAsText() == "70 Hz",
-               "restored 1084 HPF detent 2 should read '70 Hz', got '"
+               "restored low cut detent 2 should read '70 Hz', got '"
                    + param (restored, P::kHpfFreq).getCurrentValueAsText() + "'");
     }
 
@@ -166,6 +146,86 @@ int main()
                 check (std::isfinite (buffer.getReadPointer (ch)[n]), "output must be finite");
     }
 
+
+    //== Panel legends must agree with what the DSP actually does =============
+    // The frequencies live in two places: the display strings the selector
+    // shows, and the tables EqNetwork tunes its filters from. Nothing in the
+    // type system ties them together, so a panel that reads 700 Hz while the
+    // filter sits at 100 Hz would compile and run and look entirely fine. Every
+    // figure below is from the Neve 1073 & 1084 user manual, issue 5.
+    {
+        FrostyEqAudioProcessor proc;
+
+        // "360 Hz" -> 360, "1.6 kHz" -> 1600, "Off" -> 0.
+        const auto parse = [] (const juce::String& label)
+        {
+            if (label.equalsIgnoreCase ("off"))
+                return 0.0f;
+
+            const auto number = label.upToFirstOccurrenceOf (" ", false, true).getFloatValue();
+            return label.containsIgnoreCase ("kHz") ? number * 1000.0f : number;
+        };
+
+        const auto compare = [&] (const char* id, int position, float expected,
+                                  const juce::String& what)
+        {
+            auto& rp = param (proc, id);
+            const auto shown = parse (rp.getText (rp.convertTo0to1 ((float) position), 0));
+
+            checkClose (shown, expected, 0.5,
+                        what + ": the panel shows " + juce::String (shown)
+                             + " Hz where the manual says " + juce::String (expected));
+        };
+
+        // Bands, identical on both modules.
+        const float mid[6] { 360.0f, 700.0f, 1600.0f, 3200.0f, 4800.0f, 7200.0f };
+        const float low[4] { 35.0f, 60.0f, 110.0f, 220.0f };
+        const float high[3] { 10000.0f, 12000.0f, 16000.0f };
+
+        for (int i = 0; i < 6; ++i)
+        {
+            compare (P::kMidFreq, i, mid[i], "mid detent " + juce::String (i));
+            checkClose (frostyeq::midFreq (i), mid[i], 0.5,
+                        "the mid filter should tune to " + juce::String (mid[i]) + " Hz");
+        }
+
+        for (int i = 0; i < 4; ++i)
+        {
+            compare (P::kLfFreq, i, low[i], "low shelf detent " + juce::String (i));
+            checkClose (frostyeq::lowShelfFreq (i), low[i], 0.5,
+                        "the low shelf should tune to " + juce::String (low[i]) + " Hz");
+        }
+
+        for (int i = 0; i < 3; ++i)
+        {
+            compare (P::kHfFreq, i, high[i], "high shelf detent " + juce::String (i));
+            checkClose (frostyeq::highShelfFreq (i), high[i], 0.5,
+                        "the high shelf should tune to " + juce::String (high[i]) + " Hz");
+        }
+
+        // Cut filters.
+        const float lowCut[4] { 45.0f, 70.0f, 160.0f, 360.0f };
+        const float highCut[5] { 6000.0f, 8000.0f, 10000.0f, 14000.0f, 18000.0f };
+
+        for (int i = 0; i < 4; ++i)
+        {
+            compare (P::kHpfFreq, i + 1, lowCut[i], "low cut detent " + juce::String (i + 1));
+            checkClose (frostyeq::hpfFreq (i + 1), lowCut[i], 0.5,
+                        "the low cut should tune to " + juce::String (lowCut[i]) + " Hz");
+        }
+
+        for (int i = 0; i < 5; ++i)
+        {
+            compare (P::kLpfFreq, i + 1, highCut[i], "high cut detent " + juce::String (i + 1));
+            checkClose (frostyeq::lpfFreq (i + 1), highCut[i], 0.5,
+                        "the high cut should tune to " + juce::String (highCut[i]) + " Hz");
+        }
+
+        check (parse (param (proc, P::kHpfFreq).getText (0.0f, 0)) == 0.0f,
+               "low cut detent 0 should read Off");
+        check (parse (param (proc, P::kLpfFreq).getText (0.0f, 0)) == 0.0f,
+               "high cut detent 0 should read Off");
+    }
 
     //== Presets ==============================================================
     {
@@ -234,7 +294,6 @@ int main()
             presets.loadFactory (0);
             setValue (proc, P::kMidGain,  -6.5f);
             setValue (proc, P::kHpfFreq,   3.0f);
-            setValue (proc, P::kModel,     1.0f);
 
             check (presets.saveUser ("Round Trip"), "saving a user preset should succeed");
             check (presets.getUserNames().contains ("Round Trip"), "it should then be listed");
@@ -246,7 +305,6 @@ int main()
             presets.loadUser ("Round Trip");
             checkClose (getValue (proc, P::kMidGain), -6.5f, 0.01, "user preset restores mid gain");
             checkClose (getValue (proc, P::kHpfFreq),  3.0f, 0.01, "user preset restores the filter");
-            checkClose (getValue (proc, P::kModel),    1.0f, 0.01, "user preset restores the model");
         }
 
         // Export somewhere else, import it back.

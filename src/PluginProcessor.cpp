@@ -13,7 +13,6 @@ FrostyEqAudioProcessor::FrostyEqAudioProcessor()
 {
     const auto bind = [this] (const char* id) { return apvts.getRawParameterValue (id); };
 
-    modelParam       = bind (P::kModel);
     hfFreqParam      = bind (P::kHfFreq);
     hfGainParam      = bind (P::kHfGain);
     midFreqParam     = bind (P::kMidFreq);
@@ -31,19 +30,14 @@ FrostyEqAudioProcessor::FrostyEqAudioProcessor()
     autoGainParam    = bind (P::kAutoGain);
     oversamplingParam = bind (P::kOversampling);
 
-    jassert (modelParam != nullptr && midGainParam != nullptr && mixParam != nullptr);
+    jassert (midGainParam != nullptr && mixParam != nullptr);
 
-    hpfFreqChoice = dynamic_cast<P::PositionalChoice*> (apvts.getParameter (P::kHpfFreq));
-    jassert (hpfFreqChoice != nullptr);
 
-    apvts.addParameterListener (P::kModel, this);
     apvts.addParameterListener (P::kOversampling, this);
-    parameterChanged (P::kModel, modelParam->load());
 }
 
 FrostyEqAudioProcessor::~FrostyEqAudioProcessor()
 {
-    apvts.removeParameterListener (P::kModel, this);
     apvts.removeParameterListener (P::kOversampling, this);
     cancelPendingUpdate();
 }
@@ -52,17 +46,8 @@ FrostyEqAudioProcessor::~FrostyEqAudioProcessor()
 void FrostyEqAudioProcessor::parameterChanged (const juce::String& parameterID, float newValue)
 {
     // Fired from whichever thread moved the parameter, so this stays
-    // allocation- and lock-free: an atomic store plus an async trigger.
-    if (parameterID == P::kModel)
-    {
-        const auto model = (int) newValue;
-
-        if (hpfFreqChoice != nullptr)
-            hpfFreqChoice->setModel ((Model) model);
-
-        pendingModel.store (model, std::memory_order_relaxed);
-    }
-
+    // allocation- and lock-free: an async trigger and nothing else.
+    juce::ignoreUnused (parameterID, newValue);
     triggerAsyncUpdate();
 }
 
@@ -82,16 +67,6 @@ void FrostyEqAudioProcessor::handleAsyncUpdate()
     if (reportedLatency.exchange (latency, std::memory_order_relaxed) != latency)
         setLatencySamples (latency);
 
-    // Switching models changes what the high-pass detents are called, so the
-    // host must re-read the parameter text. Message thread only, and only when
-    // the model really moved.
-    const auto model = pendingModel.exchange (-1, std::memory_order_relaxed);
-
-    if (model >= 0 && model != lastReportedModel)
-    {
-        lastReportedModel = model;
-        updateHostDisplay();
-    }
 }
 
 //==============================================================================
@@ -146,7 +121,6 @@ void FrostyEqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
     const auto load = [] (const std::atomic<float>* p) { return p->load (std::memory_order_relaxed); };
 
     DspCore::Params p;
-    p.model         = (Model) (int) load (modelParam);
     p.hfFreqIndex   = (int) load (hfFreqParam);
     p.midFreqIndex  = (int) load (midFreqParam);
     p.lfFreqIndex   = (int) load (lfFreqParam);
@@ -201,8 +175,6 @@ void FrostyEqAudioProcessor::setStateInformation (const void* data, int sizeInBy
     // Future versions migrate here, keyed off the stored stateVersion property.
     apvts.replaceState (juce::ValueTree::fromXml (*xml));
 
-    // Restoring state can change the model without going through the listener.
-    parameterChanged (P::kModel, modelParam->load (std::memory_order_relaxed));
 }
 
 //==============================================================================
