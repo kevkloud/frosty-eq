@@ -38,7 +38,10 @@ PlainKnob::PlainKnob (juce::AudioProcessorValueTreeState& state,
     : caption (captionText)
 {
     knob.setStyle (Knob::Style::utility);
-    knob.setFaceScale (0.62f);
+
+    // Smaller than a band, which is the design's way of saying these are the
+    // ends of the strip rather than part of the equaliser.
+    knob.setFaceScale (0.50f);
     addAndMakeVisible (knob);
 
     attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
@@ -50,15 +53,16 @@ void PlainKnob::paint (juce::Graphics& g)
     const auto& p = theme::palette();
 
     // The name sits under the knob, as in the design.
-    g.setColour (knob.isEnabled() ? p.blue : p.blue.withAlpha (0.4f));
-    g.setFont (theme::labelFont (14.0f, true));
-    g.drawText (caption, getLocalBounds().removeFromBottom (18),
-                juce::Justification::centred, false);
+    theme::drawOutlinedText (g, caption,
+                             getLocalBounds().removeFromBottom (kCaptionRow)
+                                             .withTrimmedBottom (4).toFloat(),
+                             juce::Justification::centred, theme::labelFont (14.0f, true),
+                             knob.isEnabled() ? p.azure : p.azure.withAlpha (0.4f));
 }
 
 void PlainKnob::resized()
 {
-    knob.setBounds (getLocalBounds().withTrimmedBottom (18));
+    knob.setBounds (getLocalBounds().withTrimmedBottom (kCaptionRow));
 }
 
 void PlainKnob::setKnobEnabled (bool shouldBeEnabled)
@@ -80,8 +84,19 @@ ConcentricBand::ConcentricBand (juce::AudioProcessorValueTreeState& s,
         ring.setDetents (choice->choices.size());
 
     ring.setSliderSnapsToMousePosition (false);
+
+    // The legend follows the ring's sweep, so narrowing the sweep lifts the
+    // end labels off the bottom of the dial -- which is where the gain's plus
+    // and minus live. Leave them on the same arc and the two collide.
+    {
+        const auto r = ring.getRotaryParameters();
+        ring.setRotaryParameters (r.startAngleRadians + kLegendInset,
+                                  r.endAngleRadians   - kLegendInset,
+                                  r.stopAtEnd);
+    }
+
     ring.setStyle (hasCentre ? Knob::Style::bandRing : Knob::Style::filter);
-    ring.setFaceScale (hasCentre ? 0.62f : 0.40f);
+    ring.setFaceScale (hasCentre ? 0.529f : 0.35f);
 
     // The legend is drawn here, not by the slider, so a change of frequency has
     // to repaint the parent or the marked position goes stale.
@@ -100,7 +115,7 @@ ConcentricBand::ConcentricBand (juce::AudioProcessorValueTreeState& s,
         // The face is small, but the component spans the whole cell: its gain
         // track and its plus and minus are drawn well outside the face, and a
         // component only tight around the face would clip them away entirely.
-        centre.setFaceScale (0.34f);
+        centre.setFaceScale (0.286f);
         centre.setCircularHitTest (true);
         addAndMakeVisible (centre);
 
@@ -141,10 +156,14 @@ void ConcentricBand::paint (juce::Graphics& g)
 
     const auto ringRadius = juce::jmin (area.getWidth(), area.getHeight()) * 0.5f * ring.getFaceScale();
 
-    // Far enough out to clear the ring, but never so far that a label runs off
-    // the top of the cell and gets clipped by whatever is above it.
-    const auto textRadius = juce::jmin (ringRadius * (hasCentre ? 1.62f : 1.72f),
-                                        area.getHeight() * 0.5f - 11.0f);
+    // Knob edge, gap, dotted track, the same gap again, then the legend. The
+    // legend used to sit hard against the track, which is what made a band
+    // hard to read at a glance. Never so far out that a label runs off the top
+    // of the cell and is clipped by whatever is above it.
+    const auto textRadius = juce::jmin (
+        hasCentre ? centre.getTrackRadius() + FrostyLookAndFeel::kLegendGap
+                  : ringRadius + FrostyLookAndFeel::kFilterLegendGap,
+        area.getHeight() * 0.5f - 9.0f);
 
     const auto startAngle = ring.getRotaryParameters().startAngleRadians;
     const auto endAngle   = ring.getRotaryParameters().endAngleRadians;
@@ -160,11 +179,17 @@ void ConcentricBand::paint (juce::Graphics& g)
 
         const auto isSelected = (i == selected);
 
-        g.setColour (! ringEnabled ? p.blue.withAlpha (0.28f)
-                                   : (isSelected ? p.blue : p.blue.withAlpha (0.72f)));
-        g.setFont (theme::labelFont (isSelected ? 13.0f : 12.0f, true));
-        g.drawText (legend[i], juce::Rectangle<float> (38.0f, 14.0f).withCentre (at),
-                    juce::Justification::centred, false);
+        // White for a position you could switch to, azure for the one you are
+        // on. The outline is what lets white sit on a near-white panel.
+        auto fill = isSelected ? p.azure : p.white;
+
+        if (! ringEnabled)
+            fill = fill.withAlpha (0.35f);
+
+        theme::drawOutlinedText (g, legend[i],
+                                 juce::Rectangle<float> (38.0f, 15.0f).withCentre (at),
+                                 juce::Justification::centred,
+                                 theme::labelFont (isSelected ? 13.0f : 12.0f, true), fill);
     }
 }
 
@@ -172,8 +197,17 @@ void ConcentricBand::resized()
 {
     ring.setBounds (getLocalBounds());
 
-    if (hasCentre)
-        centre.setBounds (getLocalBounds());
+    if (! hasCentre)
+        return;
+
+    centre.setBounds (getLocalBounds());
+
+    // The gain track has to clear the frequency ring drawn around it, and the
+    // gain control cannot work that out from its own face.
+    const auto area = getLocalBounds().toFloat();
+    const auto ringRadius = juce::jmin (area.getWidth(), area.getHeight()) * 0.5f * ring.getFaceScale();
+
+    centre.setTrackRadius (ringRadius + FrostyLookAndFeel::kTrackGap);
 }
 
 //==============================================================================

@@ -80,6 +80,11 @@ void FrostyLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w
 
     const auto dim = [enabled] (juce::Colour c) { return enabled ? c : c.withAlpha (0.35f); };
 
+    const auto at = [centre] (float a, float r)
+    {
+        return juce::Point<float> { centre.x + r * std::sin (a), centre.y - r * std::cos (a) };
+    };
+
     // The frequency ring of a band: a white annulus with the selected position
     // marked on it, drawn behind the gain control that sits inside it.
     if (style == Knob::Style::bandRing)
@@ -94,7 +99,7 @@ void FrostyLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w
         g.setColour (dim (p.white));
         g.strokePath (ring, juce::PathStrokeType (thickness));
 
-        g.setColour (dim (p.outline));
+        g.setColour (dim (p.grey));
         g.drawEllipse (juce::Rectangle<float> (radius * 2.0f, radius * 2.0f).withCentre (centre), 1.6f);
         g.drawEllipse (juce::Rectangle<float> ((radius - thickness) * 2.0f,
                                                (radius - thickness) * 2.0f).withCentre (centre), 1.6f);
@@ -104,78 +109,70 @@ void FrostyLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w
         marker.addCentredArc (centre.x, centre.y, mid, mid, 0.0f,
                               angle - 0.10f, angle + 0.10f, true);
 
-        g.setColour (dim (p.blue));
+        g.setColour (dim (p.azure));
         g.strokePath (marker, juce::PathStrokeType (thickness));
         return;
     }
 
-    const auto face    = style == Knob::Style::bandGain ? p.pinkFill : p.blueFill;
-    const auto accent  = style == Knob::Style::bandGain ? p.pink : p.blue;
+    const auto band    = style == Knob::Style::bandGain;
+    const auto face    = band ? p.pinkFill : p.azure;
+    const auto accent  = band ? p.pink : p.blue;
     const auto faceBox = juce::Rectangle<float> (radius * 2.0f, radius * 2.0f).withCentre (centre);
 
-    // Gain controls carry a dotted track with the setting marked on it.
-    if (style == Knob::Style::utility || style == Knob::Style::bandGain)
+    // Gain controls carry a dotted track, with the zero mark on it and a plus
+    // and a minus at its ends.
+    if (style == Knob::Style::utility || band)
     {
-        // Clear of the frequency ring, between it and the legend.
-        const auto trackRadius = radius * (style == Knob::Style::bandGain ? 1.98f : 1.34f);
+        const auto given = knob != nullptr ? knob->getTrackRadius() : 0.0f;
+        const auto track = given > 0.0f ? given : radius + kTrackGap;
 
-        drawDottedArc (g, centre, trackRadius, startAngle, endAngle,
+        // The track runs from the minus round to the plus and not a hair
+        // further, stopping just clear of each symbol rather than running dots
+        // through it.
+        constexpr float symbolClearance = 0.11f;
+
+        drawDottedArc (g, centre, track, startAngle + symbolClearance, endAngle - symbolClearance,
                        dim (accent.withAlpha (enabled ? 0.55f : 0.2f)), 1.6f);
 
-        const juce::Point<float> at { centre.x + trackRadius * std::sin (angle),
-                                      centre.y - trackRadius * std::cos (angle) };
+        // The heavy dot marks nought, and stays there. It used to follow the
+        // pointer, which made it a second, redundant indicator and left no mark
+        // for where the control rests.
+        const auto range = slider.getRange();
+        const auto zero  = range.getLength() > 0.0
+                             ? (float) juce::jlimit (0.0, 1.0, (0.0 - range.getStart()) / range.getLength())
+                             : 0.5f;
 
         g.setColour (dim (accent));
-        g.fillEllipse (juce::Rectangle<float> (5.0f, 5.0f).withCentre (at));
+        g.fillEllipse (juce::Rectangle<float> (5.0f, 5.0f)
+                           .withCentre (at (startAngle + zero * (endAngle - startAngle), track)));
+
+        // A plus and a minus, and nothing else. No number, no readout. They sit
+        // exactly on the ends of the sweep, so the pointer arrives on the plus
+        // at full boost and on the minus at full cut -- which is the whole of
+        // what the control tells you.
+        static const auto minus = juce::String (juce::CharPointer_UTF8 ("\xe2\x88\x92"));
+
+        const auto box = juce::Rectangle<float> (18.0f, 18.0f);
+        const auto font = theme::labelFont (16.0f, true);
+
+        theme::drawOutlinedText (g, minus, box.withCentre (at (startAngle, track)),
+                                 juce::Justification::centred, font, dim (accent));
+        theme::drawOutlinedText (g, "+", box.withCentre (at (endAngle, track)),
+                                 juce::Justification::centred, font, dim (accent));
     }
 
     g.setColour (dim (face));
     g.fillEllipse (faceBox);
-    g.setColour (dim (p.outline));
-    g.drawEllipse (faceBox.reduced (0.8f), 1.6f);
+    g.setColour (dim (band ? p.outline : p.grey));
+    g.drawEllipse (faceBox.reduced (0.8f), band ? 1.6f : 2.2f);
 
     // Pointer.
     {
         const auto tip  = radius - 3.0f;
         const auto tail = radius * 0.05f;
 
-        const juce::Point<float> a { centre.x + tail * std::sin (angle), centre.y - tail * std::cos (angle) };
-        const juce::Point<float> b { centre.x + tip  * std::sin (angle), centre.y - tip  * std::cos (angle) };
-
         g.setColour (dim (p.white));
-        g.drawLine ({ a, b }, 2.6f);
-    }
-
-    // A plus and a minus, and nothing else. No number, no arc.
-    // Plus on the left, minus on the right, as the design has them.
-    if (style == Knob::Style::utility || style == Knob::Style::bandGain)
-    {
-        g.setColour (dim (accent));
-        g.setFont (theme::labelFont (15.0f, true));
-
-        const auto box = juce::Rectangle<float> (16.0f, 16.0f);
-
-        const auto mark = [&] (const char* text, float a, float r)
-        {
-            g.drawText (text, box.withCentre ({ centre.x + r * std::sin (a),
-                                                centre.y - r * std::cos (a) }),
-                        juce::Justification::centred, false);
-        };
-
-        if (style == Knob::Style::bandGain)
-        {
-            // Below the ring on either side, outside it, where the design puts
-            // them -- roughly eight and four o'clock.
-            const auto r = radius * 1.98f;
-            mark ("+", 4.05f, r);
-            mark ("-", 2.23f, r);
-        }
-        else
-        {
-            const auto r = radius * 1.62f;
-            mark ("+", 4.45f, r);
-            mark ("-", 1.83f, r);
-        }
+        g.drawLine ({ at (angle, tail), at (angle, tip) }, 2.6f);
     }
 }
 
@@ -184,13 +181,14 @@ void FrostyLookAndFeel::drawToggleButton (juce::Graphics& g, juce::ToggleButton&
                                           bool shouldDrawHighlighted, bool shouldDrawDown)
 {
     const auto& p = theme::palette();
-    const auto bounds = button.getLocalBounds().toFloat().reduced (0.5f);
+    const auto bounds = button.getLocalBounds().toFloat().reduced (3.0f);
     const auto on = button.getToggleState();
 
-    // Hi-Q is blue, the equaliser and phase switches pink, as in the design.
-    const auto tint = button.getName() == "blue" ? p.blueFill : p.pinkFill;
+    // Hi-Q takes its own azure, a shade deeper than the pastel used for the
+    // knob caps; the equaliser and phase switches are pink.
+    const auto tint = button.getName() == "blue" ? p.hiQ : p.engagedPink;
 
-    auto fill = on ? tint : p.background;
+    auto fill = on ? tint : p.grey;
 
     if (shouldDrawDown)             fill = fill.darker (0.12f);
     else if (shouldDrawHighlighted) fill = fill.brighter (0.06f);
@@ -198,18 +196,21 @@ void FrostyLookAndFeel::drawToggleButton (juce::Graphics& g, juce::ToggleButton&
     if (! button.isEnabled())
         fill = fill.withAlpha (0.35f);
 
+    // An engaged switch glows: a few rounded rectangles stepping outwards at
+    // falling alpha. Kept faint, because the text has to stay first.
+    if (on && button.isEnabled())
+        for (int i = 3; i >= 1; --i)
+            {
+                g.setColour (tint.withAlpha (0.10f * (float) i / 3.0f));
+                g.fillRoundedRectangle (bounds.expanded ((float) i), theme::corner + (float) i);
+            }
+
     g.setColour (fill);
     g.fillRoundedRectangle (bounds, theme::corner);
 
-    if (! on)
-    {
-        g.setColour (p.outline.withAlpha (button.isEnabled() ? 0.7f : 0.3f));
-        g.drawRoundedRectangle (bounds, theme::corner, 1.2f);
-    }
-
-    g.setColour (on ? p.white : (button.isEnabled() ? p.textDim : p.textDim.withAlpha (0.4f)));
-    g.setFont (theme::labelFont (11.0f, true));
-    g.drawText (button.getButtonText(), bounds, juce::Justification::centred, false);
+    theme::drawOutlinedText (g, button.getButtonText(), bounds, juce::Justification::centred,
+                             theme::labelFont (12.0f, true),
+                             p.white.withAlpha (button.isEnabled() ? 1.0f : 0.4f));
 }
 
 } // namespace frostyeq::gui

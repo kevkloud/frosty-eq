@@ -12,9 +12,9 @@ namespace
 
     constexpr int kGainRow   = 100;   // knob plus the name under it
     constexpr int kRuleRow   = 18;
-    constexpr int kBandRow   = 118;
+    constexpr int kBandRow   = 140;   // knob, gap, dotted track, gap, legend
     constexpr int kHiQRow    = 22;
-    constexpr int kFilterRow = 80;
+    constexpr int kFilterRow = 92;
     constexpr int kSwitchRow = 28;
 
     const juce::String phaseGlyph = juce::String (juce::CharPointer_UTF8 ("\xc3\x98"));
@@ -58,15 +58,15 @@ void FrostyEqAudioProcessorEditor::Panel::paint (juce::Graphics& g)
     // Section legends, with a hairline running out to either side.
     for (const auto& rule : rules)
     {
-        g.setColour (p.pink);
-        g.setFont (theme::labelFont (14.0f, true));
+        const auto font = theme::labelFont (14.0f, true);
 
         const auto width = juce::jmax (44, juce::roundToInt (
-            juce::GlyphArrangement::getStringWidth (g.getCurrentFont(), rule.text)) + 16);
+            juce::GlyphArrangement::getStringWidth (font, rule.text)) + 16);
         const auto box = juce::Rectangle<int> (0, rule.y, getWidth(), kRuleRow)
                              .withSizeKeepingCentre (width, kRuleRow);
 
-        g.drawText (rule.text, box, juce::Justification::centred, false);
+        theme::drawOutlinedText (g, rule.text, box.toFloat(), juce::Justification::centred,
+                                 font, p.labelPink);
 
         if (! rule.lines)
             continue;
@@ -129,17 +129,14 @@ void FrostyEqAudioProcessorEditor::Panel::resized()
     }
 
     {
-        // Knob and meter centred together, so the meter does not push the panel
-        // wide from the edge.
+        // Every knob on the panel shares one centre line, output included. The
+        // meter is not a knob and does not join it: it goes out to the right
+        // margin, where it reads as an indicator beside the strip rather than
+        // as something that shoves the output knob off the axis.
         auto bottom = area.removeFromTop (kGainRow);
 
-        constexpr int knobWidth = 130, meterWidth = 40, gap = 4;
-        auto group = bottom.withSizeKeepingCentre (knobWidth + gap + meterWidth,
-                                                   bottom.getHeight());
-
-        outputLevel.setBounds (group.removeFromLeft (knobWidth));
-        group.removeFromLeft (gap);
-        meter.setBounds (group.withSizeKeepingCentre (meterWidth, 52));
+        meter.setBounds (bottom.withTrimmedTop (4).withTrimmedBottom (22).removeFromRight (44));
+        outputLevel.setBounds (bottom);
     }
 }
 

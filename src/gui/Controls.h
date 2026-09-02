@@ -21,6 +21,9 @@ public:
     void setKnobEnabled (bool);
 
 private:
+    /** Room under the knob for its name. */
+    static constexpr int kCaptionRow = 22;
+
     juce::String caption;
     Knob knob;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;
@@ -54,6 +57,10 @@ public:
     void setRingEnabled (bool);
 
 private:
+    /** How much narrower the frequency sweep is than the gain sweep, each
+        side, in radians. */
+    static constexpr float kLegendInset = 0.60f;
+
     void buildLegend();
 
     juce::RangedAudioParameter* frequency = nullptr;

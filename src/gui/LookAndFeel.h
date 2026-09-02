@@ -34,6 +34,15 @@ public:
     void setFaceScale (float s) noexcept { faceScale = s; }
     float getFaceScale() const noexcept  { return faceScale; }
 
+    /** Where the dotted gain track sits, in pixels from the centre.
+
+        Given rather than derived because the gain control of a band has to
+        clear the frequency ring drawn around it, and the face inside that ring
+        knows nothing about the ring's size. Zero means "just outside my own
+        face", which is what the input and output knobs want. */
+    void setTrackRadius (float r) noexcept { trackRadius = r; }
+    float getTrackRadius() const noexcept  { return trackRadius; }
+
     /** The inner control of a concentric pair claims only its own circle, so
         the ring around it stays grabbable right up to the corners. */
     void setCircularHitTest (bool b) noexcept { circularHit = b; }
@@ -54,6 +63,7 @@ private:
     bool  circularHit = false;
     int   detents = 0;
     float faceScale = 1.0f;
+    float trackRadius = 0.0f;
 };
 
 //==============================================================================
@@ -72,6 +82,17 @@ public:
                            bool shouldDrawHighlighted, bool shouldDrawDown) override;
 
     juce::Font getLabelFont (juce::Label&) override;
+
+    /** How far out a gain track sits from the edge of the face it surrounds,
+        and how far the legend then sits beyond the track. The same two gaps
+        everywhere, which is what makes the bands and the utility knobs read as
+        one family. */
+    static constexpr float kTrackGap  = 10.0f;
+    static constexpr float kLegendGap = 12.0f;
+
+    /** A filter has no gain track between its face and its legend, so the one
+        gap there has to carry what two carry on a band. */
+    static constexpr float kFilterLegendGap = 20.0f;
 
     /** A ring of dots, used for the gain track around a band and around the
         input and output knobs. */
