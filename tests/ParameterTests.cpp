@@ -343,6 +343,94 @@ int main()
         frostyeq::PresetManager::setDirectoryForTesting ({});
     }
 
+    //== A preset must not change how loud the track is ======================
+    // Every factory preset drives the input and pulls the output back, because
+    // that is how the colour is got. If the two do not cancel, the preset is
+    // judged on being louder rather than on its tone, which is the oldest way
+    // there is to make a bad move sound like a good one. The knobs being equal
+    // and opposite is not enough on its own: the equaliser has its own
+    // broadband gain and the saturation has more, so this measures what
+    // actually comes out.
+    {
+        FrostyEqAudioProcessor proc;
+        auto& presets = proc.getPresets();
+
+        constexpr double rate = 48000.0;
+        constexpr int block = 512;
+        constexpr int blocks = 200;          // a little over two seconds
+
+        proc.prepareToPlay (rate, block);
+
+        // Pink noise at -18 dBFS RMS: broadband, and at the level a mix
+        // actually sits at rather than at the top of the scale.
+        juce::Random random (0x50f7);
+        std::vector<float> source ((size_t) (block * blocks));
+        {
+            double b0 = 0.0, b1 = 0.0, b2 = 0.0;
+
+            for (auto& v : source)
+            {
+                const auto white = (double) random.nextFloat() * 2.0 - 1.0;
+                b0 = 0.99765 * b0 + white * 0.0990460;
+                b1 = 0.96300 * b1 + white * 0.2965164;
+                b2 = 0.57000 * b2 + white * 1.0526913;
+                v = (float) ((b0 + b1 + b2 + white * 0.1848) * 0.11);
+            }
+
+            double sum = 0.0;
+            for (auto v : source) sum += (double) v * v;
+
+            const auto scale = (float) (juce::Decibels::decibelsToGain (-18.0)
+                                          / std::sqrt (sum / (double) source.size()));
+            for (auto& v : source) v *= scale;
+        }
+
+        double sourceSum = 0.0;
+        for (auto v : source) sourceSum += (double) v * v;
+        const auto sourceDb = juce::Decibels::gainToDecibels (
+            std::sqrt (sourceSum / (double) source.size()));
+
+        juce::AudioBuffer<float> buffer (2, block);
+        juce::MidiBuffer midi;
+
+        const auto& factory = presets.getFactory();
+
+        for (int index = 0; index < (int) factory.size(); ++index)
+        {
+            presets.loadFactory (index);
+            proc.reset();
+
+            double sum = 0.0;
+            int counted = 0;
+
+            for (int b = 0; b < blocks; ++b)
+            {
+                for (int ch = 0; ch < 2; ++ch)
+                    buffer.copyFrom (ch, 0, source.data() + (size_t) (b * block), block);
+
+                proc.processBlock (buffer, midi);
+
+                // The first few blocks are the smoothers arriving at the new
+                // preset, which is not what the preset sounds like.
+                if (b < 20)
+                    continue;
+
+                const auto* read = buffer.getReadPointer (0);
+
+                for (int i = 0; i < block; ++i)
+                    sum += (double) read[i] * read[i];
+
+                counted += block;
+            }
+
+            const auto outDb = juce::Decibels::gainToDecibels (std::sqrt (sum / (double) counted));
+
+            checkClose (outDb - sourceDb, 0.0, 0.5,
+                        juce::String ("preset '") + factory[(size_t) index].name
+                            + "' should come out at the level it went in");
+        }
+    }
+
     if (failures == 0)
         std::cout << "All parameter tests passed.\n";
 

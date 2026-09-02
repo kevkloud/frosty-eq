@@ -42,6 +42,11 @@ juce::Font FrostyLookAndFeel::getLabelFont (juce::Label& label)
                                                    : 11.0f);
 }
 
+juce::Font FrostyLookAndFeel::getTextButtonFont (juce::TextButton&, int buttonHeight)
+{
+    return theme::labelFont (juce::jmin (13.0f, (float) buttonHeight * 0.55f));
+}
+
 //==============================================================================
 void FrostyLookAndFeel::drawDottedArc (juce::Graphics& g, juce::Point<float> centre, float radius,
                                        float startAngle, float endAngle, juce::Colour colour,
@@ -150,15 +155,28 @@ void FrostyLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w
         // exactly on the ends of the sweep, so the pointer arrives on the plus
         // at full boost and on the minus at full cut -- which is the whole of
         // what the control tells you.
-        static const auto minus = juce::String (juce::CharPointer_UTF8 ("\xe2\x88\x92"));
+        // Drawn rather than set. The panel face has no minus sign in it, so a
+        // typed minus falls back to whatever the machine has and arrives in a
+        // different typeface from the plus beside it. Two strokes and a bar
+        // are also the one case where drawing beats setting: they match each
+        // other exactly, at any size, on any machine.
+        //
+        // No outline on them either. Every label on the panel is outlined so a
+        // pale fill reads on a pale ground, but these are a few strokes wide
+        // and an outline around them reads as a smudge.
+        {
+            const auto arm = 5.0f;
+            const auto weight = 2.6f;
 
-        const auto box = juce::Rectangle<float> (18.0f, 18.0f);
-        const auto font = theme::labelFont (16.0f, true);
+            g.setColour (dim (accent));
 
-        theme::drawOutlinedText (g, minus, box.withCentre (at (startAngle, track)),
-                                 juce::Justification::centred, font, dim (accent));
-        theme::drawOutlinedText (g, "+", box.withCentre (at (endAngle, track)),
-                                 juce::Justification::centred, font, dim (accent));
+            const auto minusAt = at (startAngle, track);
+            g.fillRect (juce::Rectangle<float> (arm * 2.0f, weight).withCentre (minusAt));
+
+            const auto plusAt = at (endAngle, track);
+            g.fillRect (juce::Rectangle<float> (arm * 2.0f, weight).withCentre (plusAt));
+            g.fillRect (juce::Rectangle<float> (weight, arm * 2.0f).withCentre (plusAt));
+        }
     }
 
     g.setColour (dim (face));
@@ -208,9 +226,34 @@ void FrostyLookAndFeel::drawToggleButton (juce::Graphics& g, juce::ToggleButton&
     g.setColour (fill);
     g.fillRoundedRectangle (bounds, theme::corner);
 
+    const auto ink = p.white.withAlpha (button.isEnabled() ? 1.0f : 0.4f);
+
+    // The polarity switch is drawn, not set. The panel face maps the slashed O
+    // onto a plain O, so typing the character gives a button marked "O", which
+    // says nothing. This is still the same symbol the hardware prints rather
+    // than an icon out of a set, which is what was asked for.
+    if (button.getButtonText() == juce::String (juce::CharPointer_UTF8 ("\xc3\x98")))
+    {
+        const auto centre = bounds.getCentre();
+        const auto r = bounds.getHeight() * 0.30f;
+        const auto weight = juce::jmax (1.6f, r * 0.22f);
+
+        juce::Path symbol;
+        symbol.addEllipse (juce::Rectangle<float> (r * 2.0f, r * 2.0f).withCentre (centre));
+        symbol.startNewSubPath (centre.x - r * 0.95f, centre.y + r * 0.95f);
+        symbol.lineTo         (centre.x + r * 0.95f, centre.y - r * 0.95f);
+
+        g.setColour (juce::Colours::black.withAlpha (ink.getFloatAlpha() * 0.9f));
+        g.strokePath (symbol, juce::PathStrokeType (weight + 1.6f, juce::PathStrokeType::curved,
+                                                    juce::PathStrokeType::rounded));
+        g.setColour (ink);
+        g.strokePath (symbol, juce::PathStrokeType (weight, juce::PathStrokeType::curved,
+                                                    juce::PathStrokeType::rounded));
+        return;
+    }
+
     theme::drawOutlinedText (g, button.getButtonText(), bounds, juce::Justification::centred,
-                             theme::labelFont (12.0f, true),
-                             p.white.withAlpha (button.isEnabled() ? 1.0f : 0.4f));
+                             theme::labelFont (bounds.getHeight() * 0.62f, true), ink);
 }
 
 } // namespace frostyeq::gui

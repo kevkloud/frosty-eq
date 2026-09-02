@@ -83,6 +83,11 @@ public:
 
     juce::Font getLabelFont (juce::Label&) override;
 
+    /** The preset strip is built from TextButtons, and it is panel text like
+        any other. The popup list of preset names is not: a heavy display face
+        makes a list of names slower to read, so that keeps the system font. */
+    juce::Font getTextButtonFont (juce::TextButton&, int buttonHeight) override;
+
     /** How far out a gain track sits from the edge of the face it surrounds,
         and how far the legend then sits beyond the track. The same two gaps
         everywhere, which is what makes the bands and the utility knobs read as

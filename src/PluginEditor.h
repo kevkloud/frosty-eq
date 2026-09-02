@@ -35,7 +35,7 @@ public:
 
     /** The size everything is laid out at. Any other size is this, scaled. */
     static constexpr int kDesignWidth  = 280;
-    static constexpr int kDesignHeight = 912;
+    static constexpr int kDesignHeight = 920;
 
 private:
     //==========================================================================

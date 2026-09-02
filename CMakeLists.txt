@@ -42,6 +42,24 @@ if(NOT FROSTY_DSP_ONLY)
 
     add_subdirectory(libs/JUCE)
 
+    # The display faces travel in the binary but are deliberately not in the
+    # repository -- they are licensed, not open. See assets/fonts/README.md.
+    set(FROSTY_FONTS
+        assets/fonts/TG-MinervaBlack-Black.otf
+        assets/fonts/TG-Blender.otf)
+
+    foreach(font ${FROSTY_FONTS})
+        if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${font}")
+            message(FATAL_ERROR
+                "Missing ${font}.\n"
+                "The panel's typefaces are licensed and are not committed. Put the "
+                ".otf files in assets/fonts/ before configuring -- see "
+                "assets/fonts/README.md for where they come from.")
+        endif()
+    endforeach()
+
+    juce_add_binary_data(FrostyEqAssets SOURCES ${FROSTY_FONTS})
+
     juce_add_plugin(FrostyEQ
         COMPANY_NAME                "LT3 Audio"
         BUNDLE_ID                   "com.lt3audio.frostyeq"
@@ -80,6 +98,7 @@ if(NOT FROSTY_DSP_ONLY)
 
     target_link_libraries(FrostyEQ
         PRIVATE
+            FrostyEqAssets
             juce::juce_audio_utils
             juce::juce_dsp
         PUBLIC

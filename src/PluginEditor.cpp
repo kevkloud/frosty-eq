@@ -13,9 +13,15 @@ namespace
     constexpr int kGainRow   = 100;   // knob plus the name under it
     constexpr int kRuleRow   = 18;
     constexpr int kBandRow   = 140;   // knob, gap, dotted track, gap, legend
-    constexpr int kHiQRow    = 22;
+    constexpr int kHiQRow    = 30;
     constexpr int kFilterRow = 92;
     constexpr int kSwitchRow = 28;
+
+    // One size for all three switches. They used to be three different widths,
+    // which made them read as three unrelated things rather than a row of
+    // switches that happen to be in different places.
+    constexpr int kSwitchWidth  = 56;
+    constexpr int kSwitchHeight = 26;
 
     const juce::String phaseGlyph = juce::String (juce::CharPointer_UTF8 ("\xc3\x98"));
 }
@@ -104,7 +110,8 @@ void FrostyEqAudioProcessorEditor::Panel::resized()
 
     // Hi-Q belongs to the mid band, so it sits with it rather than in a row of
     // unrelated switches.
-    midHiQ.setBounds (area.removeFromTop (kHiQRow).withSizeKeepingCentre (58, 20));
+    midHiQ.setBounds (area.removeFromTop (kHiQRow)
+                          .withSizeKeepingCentre (kSwitchWidth, kSwitchHeight));
 
     rule ("MID", false);
     mid.setBounds (area.removeFromTop (kBandRow));
@@ -118,12 +125,11 @@ void FrostyEqAudioProcessorEditor::Panel::resized()
     rule ({}, true);
 
     {
-        auto switches = area.removeFromTop (kSwitchRow).withTrimmedTop (2);
-        constexpr int eqlWidth = 56, phaseWidth = 44, gap = 8;
+        auto switches = area.removeFromTop (kSwitchRow);
+        constexpr int gap = 8;
 
-        auto group = switches.withSizeKeepingCentre (eqlWidth + gap + phaseWidth,
-                                                     switches.getHeight());
-        eqIn .setBounds (group.removeFromLeft (eqlWidth));
+        auto group = switches.withSizeKeepingCentre (kSwitchWidth * 2 + gap, kSwitchHeight);
+        eqIn .setBounds (group.removeFromLeft (kSwitchWidth));
         group.removeFromLeft (gap);
         phase.setBounds (group);
     }

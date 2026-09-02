@@ -481,3 +481,21 @@ auval -v aufx Fsty LT3a
 
 AGPLv3 — see `LICENSE`. JUCE is used under the AGPLv3 branch of its dual
 licence. The VST3 SDK (bundled inside JUCE) is MIT-licensed.
+
+### Fonts
+
+The panel is set in two commercial faces from Tom Gordon Design, TG Minerva
+Black Black and TG Blender. **They are not in this repository** and they are
+gitignored: this repo is public, and committing them would redistribute the
+font files to everyone who clones it, which no ordinary font licence allows.
+Embedding a face inside a compiled binary is what a font licence is normally
+bought for; publishing the file is not, and keeping the files out of git is
+what separates the two.
+
+To build, put the two `.otf` files in `assets/fonts/` first — CMake stops with
+a message naming the missing file otherwise. CI decodes them from repository
+secrets. `assets/fonts/README.md` has the detail.
+
+This keeps a public repository clean, but it does not by itself settle whether
+the built binaries may be handed to anyone beyond the people testing them.
+That still wants a word with the foundry before a public release.

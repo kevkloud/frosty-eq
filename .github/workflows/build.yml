@@ -72,6 +72,28 @@ jobs:
           fi
           ninja --version
 
+      # The panel's typefaces are licensed and are not in the repository, so
+      # they arrive here as secrets and are written out before configuring.
+      # Without them the build stops with a message rather than silently
+      # falling back to whatever face the runner happens to have.
+      - name: Restore fonts
+        shell: bash
+        env:
+          MINERVA: ${{ secrets.FONT_TG_MINERVA_BLACK_B64 }}
+          BLENDER: ${{ secrets.FONT_TG_BLENDER_B64 }}
+        run: |
+          if [ -z "$MINERVA" ] || [ -z "$BLENDER" ]; then
+            echo "The font secrets are not set on this repository."
+            echo "See assets/fonts/README.md."
+            exit 1
+          fi
+          mkdir -p assets/fonts
+          # gzip then base64: a secret is capped at 48 KB and the plain base64
+          # of one of these is over it.
+          printf '%s' "$MINERVA" | base64 --decode | gunzip > assets/fonts/TG-MinervaBlack-Black.otf
+          printf '%s' "$BLENDER" | base64 --decode | gunzip > assets/fonts/TG-Blender.otf
+          ls -la assets/fonts/
+
       # Ninja invokes cl.exe directly, so the MSVC environment has to be on the
       # PATH; the runner does not set it up outside of MSBuild.
       - name: Set up MSVC

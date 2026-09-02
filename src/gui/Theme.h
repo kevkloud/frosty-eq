@@ -55,25 +55,21 @@ const Palette& palette() noexcept;
 
 inline constexpr float corner = 3.0f;
 
-/** The one place a typeface is named.
+/** The two places a typeface is named.
 
-    The design calls for a bold, blocky display face that is not drawn yet;
-    real .otf files arrive later and replace the body of this function. Until
-    then it is the roundest bold system face that is actually installed, which
-    is why this resolves at runtime rather than naming a font that may not be
-    there.
+    Both faces are embedded in the binary rather than looked up on the machine.
+    A name resolved at runtime gives every listener a different panel: the
+    first round of design feedback on this plugin came from two people looking
+    at two different fonts without either of them knowing it.
+
+    See assets/fonts/README.md, including the note on licensing.
+
+    labelFont is Minerva Black, which is everything on the panel, tracked out a
+    little as the mockup has it. captionFont is Blender, which is INPUT and
+    OUTPUT and nothing else.
 */
-const juce::String& displayTypeface();
-
-inline juce::Font labelFont (float height, bool bold = false)
-{
-    const auto options = juce::FontOptions {}
-                             .withHeight (height)
-                             .withStyle (bold ? "Bold" : "Regular");
-
-    const auto& face = displayTypeface();
-    return juce::Font (face.isEmpty() ? options : options.withName (face));
-}
+juce::Font labelFont (float height, bool bold = false);
+juce::Font captionFont (float height);
 
 /** Text with a thin black outline around it, which is how every label on the
     panel is drawn. The outline takes the fill's alpha, so dimming a label

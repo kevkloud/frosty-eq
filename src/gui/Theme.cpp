@@ -1,28 +1,50 @@
 #include "Theme.h"
+#include <BinaryData.h>
 
 namespace frostyeq::theme
 {
 
 const Palette& palette() noexcept { return kLight; }
 
-const juce::String& displayTypeface()
+namespace
 {
-    // Resolved once, not per glyph: enumerating installed faces walks the
-    // system font list and this is called from paint.
-    static const juce::String name = []
+    /** Parsed once each. These are called from paint, and building a typeface
+        reads and decodes the whole file. */
+    juce::Typeface::Ptr minervaBlack()
     {
-        const auto installed = juce::Font::findAllTypefaceNames();
+        static const juce::Typeface::Ptr face = juce::Typeface::createSystemTypefaceFor (
+            BinaryData::TGMinervaBlackBlack_otf, (size_t) BinaryData::TGMinervaBlackBlack_otfSize);
+        return face;
+    }
 
-        for (const auto* candidate : { "SF Pro Rounded", "Avenir Next Rounded",
-                                       "Arial Rounded MT Bold", "Avenir Next",
-                                       "Segoe UI Variable Display", "Segoe UI" })
-            if (installed.contains (candidate))
-                return juce::String (candidate);
+    juce::Typeface::Ptr blender()
+    {
+        static const juce::Typeface::Ptr face = juce::Typeface::createSystemTypefaceFor (
+            BinaryData::TGBlender_otf, (size_t) BinaryData::TGBlender_otfSize);
+        return face;
+    }
 
-        return juce::String();   // nothing rounded installed: take the default sans
-    }();
+    juce::Font build (const juce::Typeface::Ptr& face, float height, float tracking)
+    {
+        if (face == nullptr)   // should not happen: the file is in the binary
+            return juce::Font (juce::FontOptions {}.withHeight (height));
 
-    return name;
+        return juce::Font (juce::FontOptions (face).withHeight (height))
+                   .withExtraKerningFactor (tracking);
+    }
+}
+
+juce::Font labelFont (float height, bool)
+{
+    // Minerva Black is a single weight, so the bold flag has nothing to select
+    // and is kept only so callers do not all have to change. The tracking is
+    // from the mockup, where the panel legends are set noticeably open.
+    return build (minervaBlack(), height, 0.08f);
+}
+
+juce::Font captionFont (float height)
+{
+    return build (blender(), height, 0.04f);
 }
 
 void drawOutlinedText (juce::Graphics& g, const juce::String& text, juce::Rectangle<float> area,

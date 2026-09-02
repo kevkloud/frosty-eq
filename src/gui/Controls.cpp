@@ -56,7 +56,7 @@ void PlainKnob::paint (juce::Graphics& g)
     theme::drawOutlinedText (g, caption,
                              getLocalBounds().removeFromBottom (kCaptionRow)
                                              .withTrimmedBottom (4).toFloat(),
-                             juce::Justification::centred, theme::labelFont (14.0f, true),
+                             juce::Justification::centred, theme::captionFont (15.0f),
                              knob.isEnabled() ? p.azure : p.azure.withAlpha (0.4f));
 }
 

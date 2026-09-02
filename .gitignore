@@ -6,3 +6,10 @@ cmake-build-*/
 .idea/
 tools/python/.venv/
 *.user
+
+# The display faces are licensed, not open. They are embedded in the binary but
+# never committed: a public repository that carries the files redistributes
+# them, which no ordinary font licence allows. CI decodes them from repository
+# secrets; see assets/fonts/README.md.
+assets/fonts/*.otf
+assets/fonts/*.ttf
